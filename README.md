@@ -42,4 +42,3 @@ The example application provides an environment for testing and validating the s
 
 ## Documentation
  - [Developer Guide](https://developer.etrade.com/home)
-# etrade
