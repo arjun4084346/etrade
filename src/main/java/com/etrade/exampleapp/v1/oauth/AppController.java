@@ -19,19 +19,19 @@ public class AppController {
 	protected Logger log = Logger.getLogger(AppController.class);
 
 	//Oauth related components
-	RequestTokenService requestTokenService;
+	private RequestTokenService requestTokenService;
 
 	//Oauth related components
-	AuthorizationService authorizationService;
+	private AuthorizationService authorizationService;
 
 	//Oauth related components
-	AccessTokenService accessTokenService;
+	private AccessTokenService accessTokenService;
 
 	/* context to store the oauth token */
-	SecurityContext context;
+	private SecurityContext context;
 
-	/* Resttemplate to make api call */
-	CustomRestTemplate customRestTemplate;
+	/* Rest template to make api call */
+	private CustomRestTemplate customRestTemplate;
 
 	/* Bean to provide api url and http method*/
 	private ApiResource apiResource;
@@ -40,11 +40,10 @@ public class AppController {
 	public String invoke(Message message) throws ApiException{
 		log.debug(" invoke mehtod controller...."+context.isIntialized());
 
-		if( !context.isIntialized() &&  message.getOauthRequired() == OauthRequired.YES) {
+		if (!context.isIntialized() && message.getOauthRequired() == OauthRequired.YES) {
 			log.debug(" Starting oauth handshake...");
 
 			if( requestTokenService != null ) {
-
 				//chaining the oauth call RequestToken -> Authorization -> AccessToken
 				requestTokenService.handleNext(authorizationService);
 				authorizationService.handleNext(accessTokenService);
@@ -62,35 +61,40 @@ public class AppController {
 		}
 
 		OAuth1Template oauthTemplate = new OAuth1Template(context, message);
-		String response = "";
+		String response;
+
 		try {
 			oauthTemplate.computeOauthSignature(message.getHttpMethod(), message.getUrl(), message.getQueryString());
 		} catch (Exception e) {
 			log.error(e);
 			throw new ApiException(500, "500", e.getMessage());
-		} 
+		}
+
 		message.setOauthHeader(oauthTemplate.getAuthorizationHeader());
+
 		try {
 			response = customRestTemplate.doExecute(message);
 			log.debug(response);
-		}catch(ResourceAccessException e) {
+		} catch (ResourceAccessException e) {
 			log.error(" Error Calling service api ",e);
 			log.error("Exception class name " + e.getCause().getClass().getSimpleName());
 
-			if( ApiException.class.isAssignableFrom(e.getCause().getClass())) {
+			if (ApiException.class.isAssignableFrom(e.getCause().getClass())) {
 				log.error(" ApiException found ");
 				throw (ApiException)(e.getCause());
-			}else
-				throw new ApiException(500,"500","Internal Failure");
-		}catch(Exception e) {
+			} else {
+				throw new ApiException(500, "500", "Internal Failure");
+			}
+		} catch (Exception e) {
 			log.error(" Error Calling service api ",e);
 			log.error("Exception class name " + e.getClass().getName());
-			if( ApiException.class.isAssignableFrom(e.getCause().getClass())) {
+			if (ApiException.class.isAssignableFrom(e.getCause().getClass())) {
 				log.error(" ApiException found ");
-				throw ((ApiException)e);
-			}else
+				throw e;
+			} else
 				throw new ApiException(500,"500","Internal Failure");
 		}
+
 		return response;
 	}
 
@@ -100,6 +104,7 @@ public class AppController {
 		msg.setHttpMethod(context.getResouces().getRequestTokenHttpMethod());
 		msg.setUrl(context.getResouces().getRequestTokenUrl());
 		msg.setContentType(ContentType.APPLICATION_FORM_URLENCODED);
+
 		return msg;
 	}
 
@@ -131,6 +136,5 @@ public class AppController {
 	public void setApiResource(ApiResource apiResource) {
 		this.apiResource = apiResource;
 	}
-
 }
 

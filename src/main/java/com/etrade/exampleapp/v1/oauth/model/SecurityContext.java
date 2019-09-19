@@ -1,30 +1,16 @@
 package com.etrade.exampleapp.v1.oauth.model;
 
 import java.util.HashMap;
+import lombok.Getter;
+import lombok.Setter;
 
+@Getter
+@Setter
 public class SecurityContext extends HashMap<String, OAuthToken> {
-	
-	Resource resouces;
-	
-	public boolean isIntialized() {
-		return intialized;
-	}
-
-	public void setIntialized(boolean intialized) {
-		this.intialized = intialized;
-	}
-	public Resource getResouces() {
-		return resouces;
-	}
-
-	public void setResouces(Resource resouces) {
-		this.resouces = resouces;
-	}
+	private Resource resouces;
+	private boolean intialized;
 
 	public OAuthToken getToken() {
 		return super.get("TOKEN");
 	}
-
-	private boolean intialized;
-	
 }

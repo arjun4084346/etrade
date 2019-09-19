@@ -12,7 +12,7 @@ import com.etrade.exampleapp.v1.oauth.model.Message;
 import com.etrade.exampleapp.v1.oauth.model.OAuthToken;
 import com.etrade.exampleapp.v1.oauth.model.SecurityContext;
 /*
- * Consumer Obtains a Request Token. Consumer sends an HTTP request to the service provider’s request token URL. 
+ * Consumer Obtains a Request Token. Consumer sends an HTTP request to the service provider’s request token URL.
  * The request MUST be signed and contains the following parameters:
  * oauth_consumer_key: The Consumer Key.
    oauth_signature_method: The signature method the Consumer used to sign the request.
@@ -44,10 +44,10 @@ public class RequestTokenService implements Receiver {
 
 			//Get map with parameters for oauth request
 			//message.getHeaderMap().putAll(params.getHeaderMap());
-			
+
 			message.setOauthHeader(params.getAuthorizationHeader());
 
-		}catch(Exception e) {
+		} catch(Exception e) {
 			log.error("Exception on Request token service",e);
 			throw new ApiException(500, "501", e.getMessage());
 		}
@@ -67,12 +67,11 @@ public class RequestTokenService implements Receiver {
 		context.put("TOKEN", oauthToken);
 
 		//Chain the request to authorization service
-		if( nextReceiver != null )
+		if (nextReceiver != null) {
 			nextReceiver.handleMessage(message, context);
-		else
-			log.error( "authorizationService is null");
-
-
+		} else {
+			log.error("authorizationService is null");
+		}
 		return true;
 	}
 

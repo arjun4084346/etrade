@@ -2,7 +2,7 @@ package com.etrade.exampleapp.config;
 
 
 /*
- * Spring base context configuration class for live and sandbox. 
+ * Spring base context configuration class for live and sandbox.
  * Bootstrapped using AnnotationConfigApplicationContext on client startup.
  * oauth related properties will be injected from property file available in classpath.
  */
@@ -113,7 +113,7 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 
 	@Value("${oauth.sandboxSecretKey}")
 	protected String sandboxSecretKey;
-	
+
 	/*
 	 * Rest template that is able to make REST requests with the oauth credentials of the provided resource.
 	 */
@@ -122,15 +122,14 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 		List<HttpMessageConverter<?>> converters = new ArrayList<HttpMessageConverter<?>>(2);
 		converters.add(new FormHttpMessageConverter() {
 			public boolean canRead(Class<?> clazz, MediaType mediaType) {
-				// always read MultiValueMaps as x-www-url-formencoded			
+				// always read MultiValueMaps as x-www-url-formencoded
 				return MultiValueMap.class.isAssignableFrom(clazz);
 			}
 		});
 		converters.add(new StringHttpMessageConverter());
 		converters.add(mappingJackson2HttpMessageConverter());
 
-
-		CustomRestTemplate oauthTemplate = new CustomRestTemplate(getClientHttpRequestFactory()); 
+		CustomRestTemplate oauthTemplate = new CustomRestTemplate(getClientHttpRequestFactory());
 		List interceptorList =  new ArrayList();
 		interceptorList.add(new MimeInterceptor());
 		oauthTemplate.setMessageConverters(converters);
@@ -138,7 +137,7 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 		oauthTemplate.setErrorHandler(new RestTemplateResponseErrorHandler());
 		return oauthTemplate;
 	}
-	
+
 	@Bean
 	public MappingJackson2HttpMessageConverter mappingJackson2HttpMessageConverter() {
 		MappingJackson2HttpMessageConverter jsonConverter = new MappingJackson2HttpMessageConverter();
@@ -152,7 +151,7 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 		jsonConverter.setObjectMapper(mapper);
 		return jsonConverter;
 	}
-	
+
 	private ClientHttpRequestFactory getClientHttpRequestFactory() {
 		int timeout = 30000;
 		RequestConfig config = RequestConfig.custom()
@@ -163,15 +162,11 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 				.setRedirectsEnabled(true)
 				.build();
 
-		TrustStrategy acceptingTrustStrategy = new TrustStrategy() {
-			public boolean isTrusted(X509Certificate[] x509Certificates, String s) throws CertificateException {
-				return true;
-			}
-		};
+		TrustStrategy acceptingTrustStrategy = (x509Certificates, s) -> true;
 
 		CloseableHttpClient client = null;
-		try {
 
+		try {
 			SSLContext sslContext = org.apache.http.ssl.SSLContexts.custom().loadTrustMaterial(null, acceptingTrustStrategy).build();
 			SSLConnectionSocketFactory csf = new SSLConnectionSocketFactory(sslContext, new NoopHostnameVerifier());
 
@@ -181,7 +176,9 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 					.setRedirectStrategy(new LaxRedirectStrategy())
 					.setSSLSocketFactory(csf)
 					.build();
-		}catch(Exception e){}
+		} catch(Exception e) {
+			System.out.println(e.toString());
+		}
 		return new HttpComponentsClientHttpRequestFactory(client);
 	}
 
@@ -195,8 +192,7 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 	 */
 	@Bean
 	public AccountListClient accountListClient() {
-		AccountListClient accountListClient = new AccountListClient();
-		return accountListClient;
+		return new AccountListClient();
 	}
 
 	/* Bean to fetch the balance for a given consumerKey and accountidkey
@@ -204,8 +200,7 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 	 */
 	@Bean
 	public BalanceClient balanceClient() {
-		BalanceClient balanceClient = new BalanceClient();
-		return balanceClient;
+		return new BalanceClient();
 	}
 
 	/* Bean to fetch the portfolio for a given accountidkey
@@ -213,8 +208,7 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 	 */
 	@Bean
 	public PortfolioClient portfolioClient() {
-		PortfolioClient portfolioClient = new PortfolioClient();
-		return portfolioClient;
+		return new PortfolioClient();
 	}
 
 	/* Bean will fetch REALTIME quotes if the user has authorized the client with oauth handshake.
@@ -222,26 +216,23 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 	 */
 	@Bean
 	public QuotesClient quotesClient() {
-		QuotesClient quotesClient = new QuotesClient();
-		return quotesClient;
+		return new QuotesClient();
 	}
 	/* Bean to fetch the order list for a given accountidkey
 	 * Application uses oauth_token & oauth_token_secret to access protected resources that is available via oauth handshake.
 	 */
 	@Bean
 	public OrderClient orderClient() {
-		OrderClient orderClient = new OrderClient();
-		return orderClient;
+		return new OrderClient();
 	}
 	/* Bean to preview the order for a selected accountidkey
 	 * Application uses oauth_token & oauth_token_secret to access protected resources that is available via oauth handshake.
 	 */
 	@Bean
 	public OrderPreview orderPreview() {
-		OrderPreview orderPreview = new OrderPreview();
-		return orderPreview;
+		return new OrderPreview();
 	}
-	
+
 	/*
 	 * velocity template expansion for preview order
 	 */
@@ -256,14 +247,12 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 		return vEngine;
 	}
 
-
-
 	@Bean
 	public List<HttpMessageConverter<?>> getMessageConverters(){
 		List<HttpMessageConverter<?>> converters = new ArrayList<>();
 		converters.add(new FormHttpMessageConverter() {
 			public boolean canRead(Class<?> clazz, MediaType mediaType) {
-				// always read MultiValueMaps as x-www-url-formencoded			
+				// always read MultiValueMaps as x-www-url-formencoded
 				return MultiValueMap.class.isAssignableFrom(clazz);
 			}
 		});
@@ -299,6 +288,7 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 		context.setResouces(oauthResouce());
 		return context;
 	}
+
 	/*
 	 * Resource object used within client to retrieve api related properties and urls
 	 */
@@ -316,7 +306,7 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 		apiResource.setOrderPreviewUri(accountsUri);
 		return apiResource;
 	}
-	
+
 	/*
 	 * Controller object used by client that manages the oauth related functionality
 	 */
@@ -330,8 +320,9 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 		appController.setCustomRestTemplate(customRestTemplate());
 		return appController;
 	}
+
 	/*
-	 * Bean to send singed request for a Request Token. On success, will grant request token and secret. 
+	 * Bean to send singed request for a Request Token. On success, will grant request token and secret.
 	 */
 	@Bean
 	public RequestTokenService requestTokenService() {
@@ -339,16 +330,18 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 		reqTokenService.setCustomRestTemplate(customRestTemplate());
 		return reqTokenService;
 	}
+
 	/*
-	 * Bean to send user to authorize url using oauth token and promt the user to authorize/grant access. On authorize, bean will 
+	 * Bean to send user to authorize url using oauth token and promt the user to authorize/grant access. On authorize, bean will
 	 * prompt the user to enter the verifier token.
 	 */
 	@Bean
 	public AuthorizationService authorizationService() {
 		return new AuthorizationService();
 	}
+
 	/*
-	 * Bean to exchange Request Token / Verifier for Access Token and  signed request. On success, grants Access Token & Token Secret 
+	 * Bean to exchange Request Token / Verifier for Access Token and  signed request. On success, grants Access Token & Token Secret
 	 */
 	@Bean
 	public AccessTokenService accessTokenService() {
@@ -356,11 +349,12 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 		accessTokenService.setCustomRestTemplate(customRestTemplate());
 		return accessTokenService;
 	}
-	public String getTokenUrl() {
+
+	private String getTokenUrl() {
 		return String.format("%s%s",baseUrl,tokenUrl);
 	}
-	public String getAccessTokenUrl() {
+
+	private String getAccessTokenUrl() {
 		return String.format("%s%s",baseUrl,accessUrl);
 	}
-	
 }

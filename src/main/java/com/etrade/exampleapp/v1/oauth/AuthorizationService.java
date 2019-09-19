@@ -16,22 +16,21 @@ import com.etrade.exampleapp.v1.terminal.KeyIn;
 public class AuthorizationService implements Receiver{
 
 	private Logger log = Logger.getLogger(AuthorizationService.class);
-
 	private Receiver nextReceiver;
-	
+
 	@Override
 	public boolean handleMessage(Message message, SecurityContext context)throws  ApiException {
 		log.debug(" AuthorizationService .. ");
 		if (Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
 			try {
 				if( context.getToken() != null ) {
-					
+
 					OAuthToken token = context.getToken();
 
 					String url = String.format("%s?key=%s&token=%s",context.getResouces().getAuthorizeUrl() ,context.getResouces().getConsumerKey(),token.getOauth_token());
 
 					Desktop.getDesktop().browse(new URI(url));
-					
+
 					System.out.print( "Enter Verifier Code : " );
 
 					String code = KeyIn.getKeyInString();
@@ -39,23 +38,23 @@ public class AuthorizationService implements Receiver{
 					log.debug("set code on to params "+code);
 
 					message.setVerifierCode(code);
-					
-					if( nextReceiver != null )
+
+					if (nextReceiver != null) {
 						nextReceiver.handleMessage(message, context);
-					else
-						log.error( " AuthorizationService : nextReceiver is null");
-				}else {
+					} else {
+						log.error(" AuthorizationService : nextReceiver is null");
+					}
+				} else {
 					return false;
 				}
-
 			} catch (Exception e) {
 				log.error(e);
 				throw new ApiException(500, "502", e.getMessage());
-			} 
-		}else{
+			}
+		} else {
 			log.error(" Launching default browser is not supported on current platform ");
 		}
-		
+
 		return false;
 	}
 

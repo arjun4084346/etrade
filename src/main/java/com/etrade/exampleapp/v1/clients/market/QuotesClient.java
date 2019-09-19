@@ -11,47 +11,44 @@ import com.etrade.exampleapp.v1.oauth.model.Message;
 import com.etrade.exampleapp.v1.oauth.model.OauthRequired;
 
 public class QuotesClient extends Client {
-	
 	@Autowired
 	AppController oauthManager;
-	
 	@Autowired
 	ApiResource apiResource;
 
-    public QuotesClient(){}
+	public QuotesClient(){}
 
-    @Override
-    public String getHttpMethod(){
-        return "GET";
-    }
+	@Override
+	public String getHttpMethod(){
+			return "GET";
+	}
 
-    @Override
-  	public String getURL(String symbol) {
-          return String.format("%s%s", getURL(), symbol);
-  	}
+	@Override
+	public String getURL(String symbol) {
+		return String.format("%s%s", getURL(), symbol);
+	}
 
-    @Override
+	@Override
 	public String getQueryParam() {
 		return null;
 	}
 
-
 	@Override
     public String getURL() {
-        return String.format("%s%s", apiResource.getApiBaseUrl(), apiResource.getQuoteUri());
+			return String.format("%s%s", apiResource.getApiBaseUrl(), apiResource.getQuoteUri());
     }
+
 	/*
 	 * Client will provide REALTIME quotes only in case of client holding the valid access token/secret(ie, if the user accessed protected resource) and should have
 	 * accepted the market data agreement on website.
 	 * if the user  has not authorized the client, this client will return DELAYED quotes.
 	 */
 	public String getQuotes(String symbol)  throws ApiException {
-
 		Message message = new Message();
 		//delayed quotes without oauth handshake
-		if( oauthManager.getContext().isIntialized()) {
+		if (oauthManager.getContext().isIntialized()) {
 			message.setOauthRequired(OauthRequired.YES);
-		}else {
+		} else {
 			message.setOauthRequired(OauthRequired.NO);
 		}
 		message.setHttpMethod(getHttpMethod());

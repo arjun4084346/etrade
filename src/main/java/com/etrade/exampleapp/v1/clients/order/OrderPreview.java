@@ -1,7 +1,7 @@
 package com.etrade.exampleapp.v1.clients.order;
 
 import static com.etrade.exampleapp.v1.terminal.ETClientApp.out;
-
+import com.etrade.exampleapp.v1.terminal.ETClientApp;
 import java.io.StringWriter;
 import java.util.Formatter;
 import java.util.HashMap;
@@ -43,15 +43,12 @@ import com.etrade.exampleapp.v1.oauth.model.OauthRequired;
                       Quantity :                                             1
  */
 public class OrderPreview extends Client {
-	
 	@Autowired
 	AppController oauthManager;
-	
 	@Autowired
 	ApiResource apiResource;
-	
 	@Inject
-    private VelocityEngine velocityEngine;
+	private VelocityEngine velocityEngine;
 
 	public OrderPreview(){}
 
@@ -67,18 +64,17 @@ public class OrderPreview extends Client {
 
 	@Override
 	public String getURL(String accountIdkKey) {
-        return String.format("%s%s%s", getURL(), accountIdkKey, "/orders/preview");
+		return String.format("%s%s%s", getURL(), accountIdkKey, "/orders/preview");
 	}
 
 	@Override
 	public String getURL() {
-        return String.format("%s%s", apiResource.getApiBaseUrl(), apiResource.getOrderPreviewUri());
+		return String.format("%s%s", apiResource.getApiBaseUrl(), apiResource.getOrderPreviewUri());
 	}
 
 	private String orderPreview(final String accountIdKey, final String request) throws ApiException{
+		log.debug(" Calling Order Preview API " + getURL(accountIdKey));
 
-  		log.debug(" Calling Order Preview API " + getURL(accountIdKey));
-		
 		Message message = new Message();
 			message.setOauthRequired(OauthRequired.YES);
 			message.setHttpMethod(getHttpMethod());
@@ -86,8 +82,8 @@ public class OrderPreview extends Client {
 			message.setContentType(ContentType.APPLICATION_JSON);
 			message.setBody(request);
 		return oauthManager.invoke(message);
-				
 	}
+
 	public void fillOrderActionMenu(int choice, Map<String,String> input) {
 		switch(choice) {
 		case 1:
@@ -101,6 +97,7 @@ public class OrderPreview extends Client {
 			break;
 		}
 	}
+
 	public void fillOrderPriceMenu(int choice, Map<String,String> input) {
 		switch(choice) {
 		case 1:
@@ -111,7 +108,6 @@ public class OrderPreview extends Client {
 			break;
 		}
 	}
-
 
 	public void fillDurationMenu(int choice, Map<String,String> input) {
 		switch(choice) {
@@ -126,47 +122,42 @@ public class OrderPreview extends Client {
 			break;
 		}
 	}
-	
+
 	public void previewOrder(final String accountIdKey, Map<String,String> inputs) {
-		String response = "";
-		String requestJson = "";
+		String response;
+		String requestJson;
+
 		try {
 			Template t = velocityEngine.getTemplate( "orderpreview.vm" );
-			
+
 			VelocityContext context = new VelocityContext();
-			
+
 			context.put("DATA_MAP", inputs);
-			
+
 			StringWriter writer = new StringWriter();
-			
+
 			t.merge( context, writer );
-			
+
 			requestJson =  writer.toString();
-			
+
 			log.debug(requestJson);
-			
+
 			response = orderPreview(accountIdKey,requestJson);
 			log.debug(response);
 			parseResponse(response);
-			
-		}catch(ApiException e) {
-			out.println();
-			out.println(String.format("HttpStatus: %20s", e.getHttpStatus()));
-			out.println(String.format("Message: %23s", e.getMessage()));
-			out.println(String.format("Error Code: %20s", e.getCode()));
-			out.println();out.println();
+		} catch(ApiException e) {
+			ETClientApp.handleApiException(e);
 		}
 		catch (Exception e) {
-			log.error(" getBalance : GenericException " ,e);
+			log.error(" getBalance : GenericException ", e);
 			out.println();
-			out.println(String.format("Generic failure"));
+			out.println("Generic failure");
 		}
-
 	}
-	
+
 	public Map<String,String> getOrderDataMap(){
 		Map<String, String> map = new HashMap<String,String>();
-		
+
 		map.put("ORDER_TYPE", "EQ");
 		map.put("CLIENT_ID", UUID.randomUUID().toString().substring(0, 8));
 		map.put("PRICE_TYPE", "");
@@ -179,21 +170,21 @@ public class OrderPreview extends Client {
 		map.put("ACTION", "");
 		map.put("QUANTITY_TYPE", "QUANTITY");
 		map.put("QUANTITY", "");
-		
+
 		return map;
 	}
-	public void parseResponse(final String body) {
-		try {
 
+	private void parseResponse(final String body) {
+		try {
 			JSONParser jsonParser = new JSONParser();
 			JSONObject jsonObject = (JSONObject) jsonParser.parse(body);
-			
+
 			JSONObject orderResponse = (JSONObject) jsonObject.get("PreviewOrderResponse");
-			JSONArray orderData = null;
-			
-			StringBuilder outputString = new StringBuilder("");
-			
-			if( orderResponse != null ) {
+			JSONArray orderData;
+
+			StringBuilder outputString = new StringBuilder();
+
+			if (orderResponse != null) {
 				orderData = (JSONArray) orderResponse.get("Order");
 				Object[] responseData = new Object[15];
 				Iterator orderItr = orderData.iterator();
@@ -201,33 +192,35 @@ public class OrderPreview extends Client {
 				StringBuilder sbuf = new StringBuilder();
 				Formatter fmt = new Formatter(sbuf);
 
-
 				JSONObject instrument = null;
 				JSONObject previewId = null;
 				JSONObject order = null;
 				JSONObject product = null;
-				
-				
+
+
 				if (orderItr.hasNext()) {
 					order = (JSONObject) orderItr.next();
 
 					JSONArray orderInstArr = (JSONArray)order.get("Instrument");
 
 					Iterator orderdInstItr = orderInstArr.iterator();
-					if( orderdInstItr.hasNext()) {
+
+					if (orderdInstItr.hasNext()) {
 						instrument = (JSONObject)orderdInstItr.next();
 						product = (JSONObject)instrument.get("Product");
 					}
+
 					JSONArray previewIds = (JSONArray)orderResponse.get("PreviewIds");
 					Iterator previewIdItr = previewIds.iterator();
-					if(previewIdItr.hasNext()) {
+
+					if (previewIdItr.hasNext()) {
 						previewId = (JSONObject)previewIdItr.next();
 					}
 				}
 				outputString.append(String.format("%30s : %45s\n", "PreviewId", String.valueOf(previewId.get("previewId"))));
 
 				outputString.append(String.format("%30s : %45s\n", "AccountId", String.valueOf(orderResponse.get("accountId"))));
-				
+
 				outputString.append(String.format("%30s : %45s\n", "Symbol", product.get("symbol")));
 
 				outputString.append(String.format("%30s : %45s\n", "Total Order Value", String.valueOf(orderResponse.get("totalOrderValue"))));
@@ -239,24 +232,17 @@ public class OrderPreview extends Client {
 				outputString.append(String.format("%30s : %45s\n", "Commission", order.get("estimatedCommission")));
 
 				outputString.append(String.format("%30s : %45s\n", "Description", instrument.get("symbolDescription")));
-				
+
 				outputString.append(String.format("%30s : %45s\n", "OrderAction", instrument.get("orderAction")));
-				
+
 				outputString.append(String.format("%30s : %45s\n", "Quantity", instrument.get("quantity")));
 
-
 				out.println(outputString.toString());
-	
 				out.println();
 				out.println();
 			}
-				
-			
-
-		}catch (Exception e) {
-			log.error(" getPortfolio " ,e);
+		} catch (Exception e) {
+			log.error(" getPortfolio ", e);
 		}
-
-
 	}
 }

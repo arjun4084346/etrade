@@ -13,11 +13,13 @@ public enum Signer {
 	}
 	public static Signer getSigner(String v) {
 		Signer p = Signer.HMAC_SHA1;
+
 		for(Signer s : Signer.values()) {
 			if( s.getValue().equals(v)) {
 				p = s;
 			}
 		}
+
 		return p;
 	}
 }

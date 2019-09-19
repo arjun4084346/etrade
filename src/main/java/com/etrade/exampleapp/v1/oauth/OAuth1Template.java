@@ -1,6 +1,7 @@
 package com.etrade.exampleapp.v1.oauth;
 
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Arrays;
@@ -48,7 +49,7 @@ public class OAuth1Template {
 
 	/**
 	 * Name of the signature method used by the client to sign the request. Required, but normally
-	 * computed using 
+	 * computed using
 	 */
 	private String signatureMethod;
 
@@ -64,7 +65,7 @@ public class OAuth1Template {
 	private BitSet unreserved = null;
 
 	private static final BitSet WWW_FORM_URL_SAFE = new BitSet(256);
-	
+
 	public OAuth1Template(SecurityContext context, Message message) {
 		this.message = message;
 		this.context = context;
@@ -117,12 +118,12 @@ public class OAuth1Template {
 	/*
 	 * The timestamp value MUST be a positive integer and MUST be equal or greater than the timestamp used in previous requests
 	 */
-	public String computeNonce() {
+	private String computeNonce() {
 		long generatedNo = secureRand.nextLong();
 		return (oauth_nonce = new String(Base64.encodeBase64((String.valueOf(generatedNo)).getBytes())));
 	}
 
-	public String computeTimestamp() {
+	private String computeTimestamp() {
 		return (timestamp = Long.toString(System.currentTimeMillis() / 1000));
 	}
 	/**
@@ -133,8 +134,8 @@ public class OAuth1Template {
 	 * @throws UnsupportedEncodingException
 	 * @throws GeneralSecurityException
 	 */
-	public void computeOauthSignature(String method, String uri, String querySring) throws UnsupportedEncodingException, GeneralSecurityException{
-		if(  message.getOauthRequired() == OauthRequired.YES) {
+	void computeOauthSignature(String method, String uri, String querySring) throws GeneralSecurityException {
+		if (message.getOauthRequired() == OauthRequired.YES) {
 
 			this.oauth_nonce = computeNonce();
 
@@ -142,7 +143,7 @@ public class OAuth1Template {
 
 			this.timestamp = computeTimestamp();
 
-			Map<String, String[]> requestMap = new TreeMap<String, String[]>(String.CASE_INSENSITIVE_ORDER);
+			Map<String, String[]> requestMap = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
 			requestMap.put("oauth_consumer_key",new String[] { context.getResouces().getConsumerKey() });
 			requestMap.put("oauth_timestamp", new String[] { this.timestamp });
@@ -151,29 +152,27 @@ public class OAuth1Template {
 
 			OAuthToken oauthtoken = this.context.getToken();
 
-			if( oauthtoken != null ){
-				requestMap.put("oauth_token", new String[]{oauthtoken.getOauth_token()}); 
+			if (oauthtoken != null) {
+				requestMap.put("oauth_token", new String[]{oauthtoken.getOauth_token()});
 				log.debug(" verifier code :"+ message.getVerifierCode());
-				if( StringUtils.isNotBlank(message.getVerifierCode())){
+				if (StringUtils.isNotBlank(message.getVerifierCode())) {
 					requestMap.put("oauth_verifier", new String[]{encode(message.getVerifierCode())});
 				}
-			}else{
+			} else {
 				requestMap.put("oauth_callback", new String[] {getCallback()});
 				requestMap.put("oauth_version", new String[] {"1.0"});
 			}
 
 			method = method.toUpperCase();
-			
+
 			log.debug("The Query String  "+ querySring);
-			
-			if( StringUtils.isNotBlank(querySring)) {
-				
+
+			if (StringUtils.isNotBlank(querySring)) {
+
 				Map<String,String[]> qParamMap = getQueryStringMap(querySring);
-				
-				if( !qParamMap.isEmpty()){
-					
+
+				if (!qParamMap.isEmpty()){
 					requestMap.putAll(qParamMap);
-					
 				}
 			}
 
@@ -190,12 +189,11 @@ public class OAuth1Template {
 			this.signature = oauthsigner.computeSignature(baseString, context);
 
 			log.debug( " signature "+ signature);
-		}else {
+		} else {
 			log.debug("Nothing to do here");
 		}
-
 	}
-	
+
 	/**
 	 * @param method - Http Method
 	 * @param uri - Url for api request
@@ -210,10 +208,9 @@ public class OAuth1Template {
 	 * HTTP GET parameters added to the URLs in the query part (as defined by [RFC3986] section 3).
 	 */
 	private Map<String,String[]> getQueryStringMap(String queryString){
-		Map<String,String[]> queryParamMap = new HashMap<String,String[]>();
-		if( queryString != null && queryString.length() > 0){
-			for(String keyValue : queryString.split("&"))
-			{
+		Map<String, String[]> queryParamMap = new HashMap<>();
+		if (queryString != null && queryString.length() > 0) {
+			for (String keyValue : queryString.split("&")) {
 				String[] p = keyValue.split("=");
 				queryParamMap.put(p[0],new String[] {p[1]});
 			}
@@ -230,12 +227,13 @@ public class OAuth1Template {
 	 */
 	private String getNormalizedParams(Map<String,String[]> paramMap){
 		StringBuilder combinedParams = new StringBuilder();
-		TreeMap<String,String[]> sortedMap = new TreeMap<String,String[]>();
-		for(String key:paramMap.keySet()){
+		TreeMap<String,String[]> sortedMap = new TreeMap<>();
+
+		for (String key : paramMap.keySet()) {
 			//the value can be null, in which case we do not want any associated array here
 			String[] encodedValues = (paramMap.get(key)!=null) ? new String[paramMap.get(key).length] : new String[0];
 			//encode keys, and sort the array
-			for(int i=0; i< encodedValues.length;i++){
+			for (int i=0; i< encodedValues.length;i++) {
 				encodedValues[i] = encode(paramMap.get(key)[i]);
 			}
 			Arrays.sort(encodedValues);
@@ -243,81 +241,77 @@ public class OAuth1Template {
 		}
 		//now we generate a string for the map in key=value&key1=value1 format by concatenating the values
 		StringBuilder normalizedRequest = new StringBuilder();
-		for(String key: sortedMap.keySet()){
-			//we need to handle the case if the value is null 
-			if(sortedMap.get(key)==null || sortedMap.get(key).length==0){
-				normalizedRequest.append(key+"=&");
+		for (String key: sortedMap.keySet()) {
+			//we need to handle the case if the value is null
+			if (sortedMap.get(key) == null || sortedMap.get(key).length==0) {
+				normalizedRequest.append(key).append("=&");
 			}
-			for(String value: sortedMap.get(key)){
+			for (String value: sortedMap.get(key)) {
 				//this for loop will not execute if the value is null or empty
-				normalizedRequest.append(key+"="+value+"&");
+				normalizedRequest.append(key).append("=").append(value).append("&");
 			}
 		}
-		return normalizedRequest.toString().substring(0,normalizedRequest.length()-1);
-
+		return normalizedRequest.toString().substring(0, normalizedRequest.length() - 1);
 	}
 
 	/**
 	 * The OAuth header is a part of the signed request, it contains the oauth_signature and oauth_signature_method parameters and their values.
-	 *  
+	 *
 	 * @return String - oauth header map for  oaut/api request
 	 */
-	public MultiValueMap<String, String> getHeaderMap(){
-		
-		MultiValueMap<String, String> requestMap = new LinkedMultiValueMap<String, String>();
-		
-		if( context.isIntialized() || OauthRequired.YES == message.getOauthRequired()) {
-			
+	private MultiValueMap<String, String> getHeaderMap() {
+
+		MultiValueMap<String, String> requestMap = new LinkedMultiValueMap<>();
+
+		if (context.isIntialized() || OauthRequired.YES == message.getOauthRequired()) {
 			requestMap.add("oauth_consumer_key", context.getResouces().getConsumerKey());
 			requestMap.add("oauth_timestamp",  this.timestamp );
 			requestMap.add("oauth_nonce",this.oauth_nonce );
 			requestMap.add("oauth_signature_method",context.getResouces().getSignatureMethod().getValue());
-			requestMap.add("oauth_signature", this.signature); 
-			if( context != null && context.getToken() !=  null ){
+			requestMap.add("oauth_signature", this.signature);
+
+			if (context != null && context.getToken() !=  null) {
 				OAuthToken oAuthToken = context.getToken();
 				requestMap.add("oauth_token", /*encode(*/oAuthToken.getOauth_token()/*)*/);
-				if( StringUtils.isNotBlank(message.getVerifierCode())){
+				if ( StringUtils.isNotBlank(message.getVerifierCode())) {
 					requestMap.add("oauth_verifier", /*encode(*/message.getVerifierCode()/*)*/);
 				}
-			}else{
+			} else {
 				requestMap.add("oauth_callback", getCallback());
 				requestMap.add("oauth_version", "1.0");
 			}
-			if( StringUtils.isNotBlank(message.getQueryString())) {
-				
-				for(String keyValue : message.getQueryString().split("&"))
-				{
+
+			if (StringUtils.isNotBlank(message.getQueryString())) {
+				for (String keyValue : message.getQueryString().split("&")) {
 					String[] p = keyValue.split("=");
 					requestMap.add(p[0], p[1]);
 				}
 			}
-
-		}else {
-			//in case of quotes api call, delayed quotes will be returned 
+		} else {
+			//in case of quotes api call, delayed quotes will be returned
 			requestMap.add("consumerKey", context.getResouces().getConsumerKey());
-
 		}
 		return requestMap;
 	}
-	
+
 	/**
 	 * It is a single string and separated generally by a comma and named Authorization.
 	 * @return String - oauth header string for  oaut/api request
 	 */
-	public String getAuthorizationHeader() {
+	String getAuthorizationHeader() {
 		MultiValueMap<String, String> requestMap = getHeaderMap();
 		StringBuilder buf = new StringBuilder("");
 		log.debug( " getAuthorizationHeader : "+ context.isIntialized() + " isOauthRequired "+ message.getOauthRequired());
-		if( context.isIntialized() || OauthRequired.YES == message.getOauthRequired()) {
 
+		if (context.isIntialized() || OauthRequired.YES == message.getOauthRequired()) {
 			buf.append("OAuth ");
 			//append(buf,"realm", "");z\
-			
+
 			for (Map.Entry<String,List<String>> e : requestMap.entrySet()) {
 				append(buf, encode(e.getKey()), encode(e.getValue().get(0)));
-			} 
+			}
 			return buf.substring(0, buf.length() - 1);
-		}else {
+		} else {
 			message.setQueryString("consumerKey="+context.getResouces().getConsumerKey());
 		}
 
@@ -333,10 +327,9 @@ public class OAuth1Template {
 	 *          oauth_token="yyyyyyyyyyyyyyyyyyyyyyyyyyyy",oauth_timestamp="1557366622"
 	 */
 	private void append(StringBuilder buf, final String key, final String value){
-		buf.append("").append(key).append("=\"").append(value).append("\",");
+		buf.append(key).append("=\"").append(value).append("\",");
 	}
 
-	
 	/**
 	 * The timestamp value MUST be a positive integer and MUST be equal or greater than the timestamp used in previous requests.
 	 * @return String  -   Returns timestamp used in generating the signature.
@@ -345,31 +338,30 @@ public class OAuth1Template {
 		return timestamp;
 	}
 
-	
 	/**
 	 * @param value - used for encoding
 	 * @return String - Returns the encoded string
 	 */
-	public static String encode(String value) {
+	static String encode(String value) {
 		if (value == null) {
 			return "";
 		}
 		try {
-			return new String(URLCodec.encodeUrl(WWW_FORM_URL_SAFE, value.getBytes("UTF-8")), "US-ASCII");
+			return new String(URLCodec.encodeUrl(WWW_FORM_URL_SAFE, value.getBytes(StandardCharsets.UTF_8)), "US-ASCII");
 		}
 		catch (UnsupportedEncodingException e) {
 			throw new RuntimeException(e);
 		}
 	}
+
 	public static String decode(String value)  {
 		if (value == null) {
 			return "";
 		}
 
 		try {
-			return new String(URLCodec.decodeUrl(value.getBytes("US-ASCII")),
-					"UTF-8");
-		} catch (UnsupportedEncodingException | DecoderException e) {
+			return new String(URLCodec.decodeUrl(value.getBytes(StandardCharsets.US_ASCII)), StandardCharsets.UTF_8);
+		} catch (DecoderException e) {
 			throw new RuntimeException(e);
 		}
 	}
@@ -394,7 +386,6 @@ public class OAuth1Template {
 		WWW_FORM_URL_SAFE.set('_');
 		WWW_FORM_URL_SAFE.set('.');
 		WWW_FORM_URL_SAFE.set('~');
-
 	}
 
 	/**
@@ -402,7 +393,8 @@ public class OAuth1Template {
 	 */
 	private OAuthSigner getSigner() {
 		OAuthSigner signer = null;
-		if( context.getResouces().getSignatureMethod() == Signer.HMAC_SHA1 )
+
+		if (context.getResouces().getSignatureMethod() == Signer.HMAC_SHA1)
 			signer = new HmacSha1Signer();
 		return signer;
 	}
