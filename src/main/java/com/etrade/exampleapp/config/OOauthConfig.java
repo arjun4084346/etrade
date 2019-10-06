@@ -6,8 +6,7 @@ package com.etrade.exampleapp.config;
  * Bootstrapped using AnnotationConfigApplicationContext on client startup.
  * oauth related properties will be injected from property file available in classpath.
  */
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
+import com.etrade.exampleapp.v1.clients.accounts.OptionsChainClient;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -113,6 +112,9 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 
 	@Value("${oauth.sandboxSecretKey}")
 	protected String sandboxSecretKey;
+
+	@Value("${api.optionsChainUri}")
+	protected String optionsChainUri;
 
 	/*
 	 * Rest template that is able to make REST requests with the oauth credentials of the provided resource.
@@ -233,6 +235,14 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 		return new OrderPreview();
 	}
 
+
+	/* Bean will fetch REALTIME options chain if the user has authorized the client with oauth handshake.
+	 * Bean will fetch DELAYED options chain if the user has not done the oauth handshake, requires consumerKey as query param
+	 */
+	@Bean
+	public OptionsChainClient optionsChainClient() {
+		return new OptionsChainClient();
+	}
 	/*
 	 * velocity template expansion for preview order
 	 */
@@ -304,6 +314,7 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 		apiResource.setApiBaseUrl(apiBaseUrl);
 		apiResource.setOrderListUri(accountsUri);
 		apiResource.setOrderPreviewUri(accountsUri);
+		apiResource.setOptionsChainUri(optionsChainUri);
 		return apiResource;
 	}
 

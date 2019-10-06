@@ -71,10 +71,12 @@ public class AppCommandLine {
 		Option acctList = new Option( "1", "Account List");
 		Option quotes = new Option( "2", "Market Quotes");
 		Option exitApp = new Option( "3", "Go Back");
+		Option optionsChain = new Option("4", "Options Chain");
 
 		menuItems.addOption(acctList);
 		menuItems.addOption(quotes);
 		menuItems.addOption(exitApp);
+		menuItems.addOption(optionsChain);
 	}
 
 	private void initSubMenuItems() {
