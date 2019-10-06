@@ -1,5 +1,6 @@
 package com.etrade.exampleapp.v1.terminal;
 
+import com.etrade.exampleapp.v1.clients.accounts.OptionsChainClient;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.text.DecimalFormat;
@@ -16,6 +17,7 @@ import org.apache.log4j.Logger;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 import com.etrade.exampleapp.config.OOauthConfig;
@@ -45,14 +47,14 @@ public class ETClientApp extends AppCommandLine {
 	private void init(boolean flag){
 		try {
 			log.debug("Current Thread :"+ Thread.currentThread().getName() + ", Id : "+Thread.currentThread().getId() );
-			if(ctx != null) {
+			if (ctx != null) {
 				ctx.close();
 			}
 			if (flag) {
 				ctx = new AnnotationConfigApplicationContext();
 				ctx.register(OOauthConfig.class);
 				ctx.refresh();
-			}else {
+			} else {
 				ctx = new AnnotationConfigApplicationContext();
 				ctx.register(SandBoxConfig.class);
 				ctx.refresh();
@@ -152,6 +154,11 @@ public class ETClientApp extends AppCommandLine {
 					out.println("Back to previous menu");
 					keyMenu(this);
 					break;
+				case 4:
+					out.println("Please enter stock symbol: ");
+					//symbol = KeyIn.getKeyInString();
+					symbol = "TSLA";
+					getOptionsChain(symbol);
 				default:
 					out.println("Invalid Option :");
 					choice = 'x';
@@ -582,7 +589,7 @@ public class ETClientApp extends AppCommandLine {
 						}
 
 						if (mutualFund != null && mutualFund.get("previousClose") != null) {
-							String previousClose = (String) (mutualFund.get("previousClose")).toString();
+							String previousClose = mutualFund.get("previousClose").toString();
 							out.println("Previous Close: " + previousClose);
 						}
 					}
@@ -598,6 +605,24 @@ public class ETClientApp extends AppCommandLine {
 		} catch(ApiException e) {
 			handleApiException(e);
 		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	private void getOptionsChain(String symbol) {
+		OptionsChainClient client = ctx.getBean(OptionsChainClient.class);
+
+		try {
+			String response = client.getOptionsChain(symbol);
+			JSONParser jsonParser = new JSONParser();
+			JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
+			JSONObject quoteResponse = (JSONObject) jsonObject.get("OptionChainResponse");
+			out.println(quoteResponse.toString());
+		} catch (ApiException e) {
+			System.err.println(e);
+			handleApiException(e);
+		}  catch (ParseException e) {
+			System.err.println(e);
 			e.printStackTrace();
 		}
 	}

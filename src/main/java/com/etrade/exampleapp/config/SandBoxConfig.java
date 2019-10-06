@@ -3,6 +3,7 @@ package com.etrade.exampleapp.config;
 /*
  * Bootstrapped using AnnotationConfigApplicationContext on selecting the sandbox option from command line and override the consumerKey/secret.
  */
+import com.etrade.exampleapp.v1.clients.accounts.OptionsChainClient;
 import org.springframework.context.annotation.Configuration;
 
 import com.etrade.exampleapp.v1.clients.accounts.AccountListClient;
@@ -60,5 +61,10 @@ public class SandBoxConfig extends OOauthConfig {
 	@Override
 	public OrderPreview orderPreview() {
 		return super.orderPreview();
+	}
+
+	@Override
+	public OptionsChainClient optionsChainClient() {
+		return super.optionsChainClient();
 	}
 }

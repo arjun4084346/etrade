@@ -38,7 +38,7 @@ public class AppController {
 
 	/*api used by all clients*/
 	public String invoke(Message message) throws ApiException{
-		log.debug(" invoke mehtod controller...."+context.isIntialized());
+		log.debug(" invoke method controller...."+context.isIntialized());
 
 		if (!context.isIntialized() && message.getOauthRequired() == OauthRequired.YES) {
 			log.debug(" Starting oauth handshake...");
@@ -51,10 +51,10 @@ public class AppController {
 				Message msg = createRequestTokenMessage();
 
 				requestTokenService.handleMessage(msg, context);
-				if( !context.isIntialized() ) {
+				if (!context.isIntialized()) {
 					log.error(" Oauth initialization failure, only delayed quote request is available");
 					throw new ApiException(500,"500", "Oauth initialization failure, only delayed quote request is available");
-				}else {
+				} else {
 					log.debug(" Oauth context initialized");
 				}
 			}

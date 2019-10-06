@@ -12,7 +12,7 @@ import com.etrade.exampleapp.v1.oauth.model.OauthRequired;
 
 /*
  *
- * Client fetches the portfoli details for selected accountIdKey available with account list.
+ * Client fetches the portfolio details for selected accountIdKey available with account list.
  * client uses oauth_token & oauth_token_secret to access protected resources that is available via oauth handshake.
  */
 public class PortfolioClient extends Client {

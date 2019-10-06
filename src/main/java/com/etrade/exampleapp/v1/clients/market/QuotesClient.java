@@ -57,5 +57,4 @@ public class QuotesClient extends Client {
 
 		return oauthManager.invoke(message);
 	}
-
 }
