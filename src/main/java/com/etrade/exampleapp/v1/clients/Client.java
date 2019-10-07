@@ -9,6 +9,4 @@ public abstract class Client {
 
 	public abstract String getHttpMethod();
 	public abstract String getURL();
-	public abstract String getURL(final String accountIdkKey);
-	public abstract String getQueryParam();
 }

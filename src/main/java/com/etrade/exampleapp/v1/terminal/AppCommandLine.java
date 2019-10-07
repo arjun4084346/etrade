@@ -72,11 +72,13 @@ public class AppCommandLine {
 		Option quotes = new Option( "2", "Market Quotes");
 		Option exitApp = new Option( "3", "Go Back");
 		Option optionsChain = new Option("4", "Options Chain");
+		Option findArbitrage = new Option("5", "Find Arbitrage Opportunities");
 
 		menuItems.addOption(acctList);
 		menuItems.addOption(quotes);
 		menuItems.addOption(exitApp);
 		menuItems.addOption(optionsChain);
+		menuItems.addOption(findArbitrage);
 	}
 
 	private void initSubMenuItems() {

@@ -24,7 +24,6 @@ public class AccountListClient extends Client {
 		super();
 	}
 
-	@Override
 	public String getQueryParam() {
 		// TODO Auto-generated method stub
 		return null;
@@ -43,7 +42,6 @@ public class AccountListClient extends Client {
 		return String.format("%s%s", apiResource.getApiBaseUrl(),apiResource.getAcctListUri());
 	}
 
-	@Override
 	public String getURL(String accountIdkKey) {
 		// TODO Auto-generated method stub
 		return null;

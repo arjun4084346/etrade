@@ -23,12 +23,10 @@ public class QuotesClient extends Client {
 			return "GET";
 	}
 
-	@Override
 	public String getURL(String symbol) {
 		return String.format("%s%s", getURL(), symbol);
 	}
 
-	@Override
 	public String getQueryParam() {
 		return null;
 	}

@@ -45,7 +45,7 @@ import com.etrade.exampleapp.v1.clients.accounts.BalanceClient;
 import com.etrade.exampleapp.v1.clients.accounts.PortfolioClient;
 import com.etrade.exampleapp.v1.clients.market.QuotesClient;
 import com.etrade.exampleapp.v1.clients.order.OrderClient;
-import com.etrade.exampleapp.v1.clients.order.OrderPreview;
+import com.etrade.exampleapp.v1.clients.order.OrderPreviewClient;
 import com.etrade.exampleapp.v1.exception.RestTemplateResponseErrorHandler;
 import com.etrade.exampleapp.v1.oauth.AccessTokenService;
 import com.etrade.exampleapp.v1.oauth.AppController;
@@ -231,8 +231,8 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 	 * Application uses oauth_token & oauth_token_secret to access protected resources that is available via oauth handshake.
 	 */
 	@Bean
-	public OrderPreview orderPreview() {
-		return new OrderPreview();
+	public OrderPreviewClient orderPreview() {
+		return new OrderPreviewClient();
 	}
 
 
