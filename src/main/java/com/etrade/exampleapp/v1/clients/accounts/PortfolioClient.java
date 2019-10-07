@@ -27,12 +27,10 @@ public class PortfolioClient extends Client {
 		return "GET";
 	}
 
-	@Override
 	public String getURL(String accountIdkKey) {
         return String.format("%s%s%s", getURL(), accountIdkKey, "/portfolio");
 	}
 
-	@Override
 	public String getQueryParam() {
 		return null;
 	}

@@ -7,6 +7,9 @@ import com.etrade.exampleapp.v1.oauth.model.ApiResource;
 import com.etrade.exampleapp.v1.oauth.model.ContentType;
 import com.etrade.exampleapp.v1.oauth.model.Message;
 import com.etrade.exampleapp.v1.oauth.model.OauthRequired;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 
 
@@ -24,18 +27,14 @@ public class OptionsChainClient extends Client {
   }
 
   @Override
-  public String getURL(String symbol) {
-    return String.format("%s", getURL());
-  }
-
-  @Override
   public String getURL() {
     return String.format("%s%s", apiResource.getApiBaseUrl(), apiResource.getOptionsChainUri());
   }
 
-  @Override
-  public String getQueryParam() {
-    return "symbol=TSLA&expiryYear=2019&expiryMonth=11&strikePriceNear=230&noOfStrikes=8";
+  public String getQueryParam(List<Pair> queryParams) {
+    return queryParams.stream()
+        .map(pair -> pair.getLeft() + "=" + pair.getRight())
+        .collect(Collectors.joining("&"));
   }
 
 
@@ -44,13 +43,13 @@ public class OptionsChainClient extends Client {
    * accepted the market data agreement on website.
    * if the user  has not authorized the client, this client will return DELAYED quotes.
    */
-  public String getOptionsChain(String symbol)  throws ApiException {
+  public String getOptionsChain(String symbol, List<Pair> queryParams)  throws ApiException {
     Message message = new Message();
 
     message.setOauthRequired(OauthRequired.YES);
     message.setHttpMethod(getHttpMethod());
-    message.setUrl(getURL(symbol));
-    message.setQueryString(getQueryParam());
+    message.setUrl(getURL());
+    message.setQueryString(getQueryParam(queryParams));
     message.setContentType(ContentType.APPLICATION_JSON);
 
     return oauthManager.invoke(message);

@@ -4,15 +4,21 @@ import com.etrade.exampleapp.v1.clients.accounts.OptionsChainClient;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.Formatter;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -27,7 +33,7 @@ import com.etrade.exampleapp.v1.clients.accounts.BalanceClient;
 import com.etrade.exampleapp.v1.clients.accounts.PortfolioClient;
 import com.etrade.exampleapp.v1.clients.market.QuotesClient;
 import com.etrade.exampleapp.v1.clients.order.OrderClient;
-import com.etrade.exampleapp.v1.clients.order.OrderPreview;
+import com.etrade.exampleapp.v1.clients.order.OrderPreviewClient;
 import com.etrade.exampleapp.v1.clients.order.OrderTerm;
 import com.etrade.exampleapp.v1.clients.order.PriceType;
 import com.etrade.exampleapp.v1.exception.ApiException;
@@ -156,9 +162,12 @@ public class ETClientApp extends AppCommandLine {
 					break;
 				case 4:
 					out.println("Please enter stock symbol: ");
-					//symbol = KeyIn.getKeyInString();
-					symbol = "TSLA";
-					getOptionsChain(symbol);
+					symbol = KeyIn.getKeyInString();
+					getOptionsChain(symbol, new ArrayList<>());
+					break;
+				case 5:
+					findArbitrageOpportunities();
+					break;
 				default:
 					out.println("Invalid Option :");
 					choice = 'x';
@@ -221,7 +230,7 @@ public class ETClientApp extends AppCommandLine {
 	}
 
 	public void previewOrder(){
-		OrderPreview client = ctx.getBean(OrderPreview.class);
+		OrderPreviewClient client = ctx.getBean(OrderPreviewClient.class);
 		Map<String,String> inputs = client.getOrderDataMap();
 		String accountIdKey;
 		out.print("Please select an account index for which you want to preview Order: ");
@@ -504,11 +513,10 @@ public class ETClientApp extends AppCommandLine {
 				JSONArray quoteData = (JSONArray) quoteResponse.get("QuoteData");
 
 				if (quoteData != null) {
-					Iterator itr = quoteData.iterator();
 
-					while (itr.hasNext()) {
+					for (Object quoteDatum : quoteData) {
 						out.println();
-						JSONObject innerObj = (JSONObject) itr.next();
+						JSONObject innerObj = (JSONObject) quoteDatum;
 						if (innerObj != null && innerObj.get("dateTime") != null) {
 							String dateTime = (String) (innerObj.get("dateTime"));
 							out.println("Date Time: " + dateTime);
@@ -521,13 +529,13 @@ public class ETClientApp extends AppCommandLine {
 						}
 
 						if (product != null && product.get("securityType") != null) {
-							String securityType = (String) (product.get("securityType")).toString();
+							String securityType = product.get("securityType").toString();
 							out.println("Security Type: " + securityType);
 						}
 
 						JSONObject all = (JSONObject) innerObj.get("All");
 						if (all != null && all.get("lastTrade") != null) {
-							String lastTrade = (String) (all.get("lastTrade")).toString();
+							String lastTrade = all.get("lastTrade").toString();
 							out.println("Last Price: " + lastTrade);
 						}
 
@@ -577,7 +585,7 @@ public class ETClientApp extends AppCommandLine {
 						}
 
 						if (mutualFund != null && mutualFund.get("changeClose") != null
-								&& mutualFund.get("changeClosePercentage") != null ) {
+								&& mutualFund.get("changeClosePercentage") != null) {
 							String changeClose = format.format(mutualFund.get("changeClose"));
 							String changeClosePercentage = (String) (mutualFund.get("changeClosePercentage")).toString();
 							out.println("Today's Change: " + changeClose + " (" + changeClosePercentage + "%)");
@@ -609,22 +617,127 @@ public class ETClientApp extends AppCommandLine {
 		}
 	}
 
-	private void getOptionsChain(String symbol) {
+	// Not well tested
+	private double getCurrentMidPrice(String symbol) {
+		QuotesClient client = ctx.getBean(QuotesClient.class);
+
+		try {
+			String response = client.getQuotes(symbol);
+			try {
+				JSONParser jsonParser = new JSONParser();
+				JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
+				JSONObject quoteResponse = (JSONObject) jsonObject.get("QuoteResponse");
+				JSONArray quoteData = (JSONArray) quoteResponse.get("QuoteData");
+
+				if (quoteData != null) {
+					for (Object quoteDatum : quoteData) {
+						JSONObject innerObj = (JSONObject) quoteDatum;
+						JSONObject all = (JSONObject) innerObj.get("All");
+						return ((Double) all.get("bid") + (Double) all.get("ask")) / 2;
+					}
+				} else {
+					log.error(" Error : Invalid stock symbol.");
+					out.println("Error : Invalid Stock Symbol.\n");
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		} catch(ApiException e) {
+			handleApiException(e);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return 0.0;
+	}
+
+	private JSONObject getOptionsChain(String symbol, List<Pair> queryParams) {
 		OptionsChainClient client = ctx.getBean(OptionsChainClient.class);
 
 		try {
-			String response = client.getOptionsChain(symbol);
+			String response = client.getOptionsChain(symbol, queryParams);
 			JSONParser jsonParser = new JSONParser();
 			JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
-			JSONObject quoteResponse = (JSONObject) jsonObject.get("OptionChainResponse");
-			out.println(quoteResponse.toString());
+			return (JSONObject) jsonObject.get("OptionChainResponse");
 		} catch (ApiException e) {
 			System.err.println(e);
 			handleApiException(e);
-		}  catch (ParseException e) {
+		} catch (ParseException e) {
 			System.err.println(e);
 			e.printStackTrace();
 		}
+		return new JSONObject();
+	}
+
+	private void findArbitrageOpportunities() {
+		Calendar cal = Calendar.getInstance();
+		String expiryMonth = String.valueOf(cal.get(Calendar.MONTH) + 1);
+		String optionCategory = "ALL";
+		String includeWeekly = "true";
+		List<Pair> queryParams = new ArrayList<>();
+		queryParams.add(Pair.of("includeWeekly", "true"));
+		queryParams.add(Pair.of("expiryDay", "25"));
+		queryParams.add(Pair.of("expiryYear", "2019"));
+		queryParams.add(Pair.of("expiryMonth", "10"));
+		queryParams.add(Pair.of("optionCategory", "ALL"));
+		queryParams.add(Pair.of("noOfStrikes", "4"));
+
+
+		for (String symbol : AppConfig.watchlist) {
+			queryParams.add(Pair.of("symbol", symbol));
+			double currentPrice = getCurrentMidPrice(symbol);
+			//String noOfStrikes = String.valueOf(Math.round(Double.valueOf(currentPrice)/10));
+			//queryParams.add(Pair.of("noOfStrikes", noOfStrikes));
+			JSONObject optionsChain = getOptionsChain(symbol, queryParams);
+			processOptionsChain(currentPrice, optionsChain);
+			queryParams.remove(Pair.of("symbol", symbol));
+		}
+	}
+
+	private void processOptionsChain(double currentPrice, JSONObject optionsChain) {
+		JSONArray optionPair = (JSONArray) optionsChain.get("OptionPair");
+		for (Object o : optionPair) {
+			JSONObject callPutPair = (JSONObject) o;
+			JSONObject call = (JSONObject) callPutPair.get("Call");
+			JSONObject put = (JSONObject) callPutPair.get("Put");
+			String[] quoteDetail = ((String) call.get("quoteDetail")).split(":");
+			// e.g. https://api.etrade.com/v1/market/quote/TSLA:2019:11:22:CALL:257.500000
+
+			String expiry = quoteDetail[2] + ":" + quoteDetail[3] + ":" + quoteDetail[4];
+			Date expiryDate;
+			try {
+				expiryDate = new SimpleDateFormat("yyyy:MM:dd").parse(expiry);
+			} catch (java.text.ParseException e) {
+				throw new RuntimeException(e);
+			}
+			int daysToExpiry = (int) (expiryDate.getTime() - System.currentTimeMillis()) / (24 * 60 * 60 * 1000);
+			double extrinsicCall = getExtrinsicOfCall(currentPrice, call);
+			double extrinsicPut = getExtrinsicOfPut(currentPrice, put);
+			double arbitrage = extrinsicCall - extrinsicPut;
+			double annualArbitrage = (arbitrage/daysToExpiry) * 365;
+			// assuming 25% margin requirement
+			double margin = currentPrice * 25;
+			// interest = prt/100 => r = interest * 100 / pt
+			double annualArbitragePercentage = annualArbitrage * 100 / margin;
+			if (annualArbitragePercentage >= AppConfig.arbitrageStrength) {
+				out.println(call.get("optionRootSymbol") + " :: " + expiry + " :: " + call.get("strikePrice"));
+			}
+		}
+	}
+
+	private double getExtrinsicOfCall (double currentPrice, JSONObject call) {
+		double strikePrice = (Double) call.get("strikePrice");
+		double callPrice = ((Double) call.get("bid") + (Double) call.get("ask")) / 2;
+		double intrinsic = (Double) call.get("strikePrice") > currentPrice ? 0.0 : currentPrice - strikePrice;
+
+		return Math.max(0.0, callPrice - intrinsic) * 100;
+	}
+
+	private double getExtrinsicOfPut (double currentPrice, JSONObject put) {
+		double strikePrice = (Double) put.get("strikePrice");
+		double putPrice = ((Double) put.get("bid") + (Double) put.get("ask")) / 2;
+		double intrinsic = (Double) put.get("strikePrice") < currentPrice ? 0.0 : strikePrice - currentPrice;
+
+		return Math.max(0.0, putPrice - intrinsic) * 100;
 	}
 
 	private void getOrders(final String acctIndex) {

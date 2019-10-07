@@ -42,7 +42,7 @@ import com.etrade.exampleapp.v1.oauth.model.OauthRequired;
                    OrderAction :                                           BUY
                       Quantity :                                             1
  */
-public class OrderPreview extends Client {
+public class OrderPreviewClient extends Client {
 	@Autowired
 	AppController oauthManager;
 	@Autowired
@@ -50,19 +50,13 @@ public class OrderPreview extends Client {
 	@Inject
 	private VelocityEngine velocityEngine;
 
-	public OrderPreview(){}
+	public OrderPreviewClient(){}
 
 	@Override
 	public String getHttpMethod(){
 		return "POST";
 	}
 
-	@Override
-	public String getQueryParam() {
-		return null;
-	}
-
-	@Override
 	public String getURL(String accountIdkKey) {
 		return String.format("%s%s%s", getURL(), accountIdkKey, "/orders/preview");
 	}
