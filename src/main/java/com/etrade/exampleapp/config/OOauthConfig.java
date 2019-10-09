@@ -116,6 +116,9 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 	@Value("${api.optionsChainUri}")
 	protected String optionsChainUri;
 
+	@Value("${account.Id.key}")
+	protected String accountIdKey;
+
 	/*
 	 * Rest template that is able to make REST requests with the oauth credentials of the provided resource.
 	 */
@@ -315,6 +318,7 @@ public class OOauthConfig extends WebSecurityConfigurerAdapter{
 		apiResource.setOrderListUri(accountsUri);
 		apiResource.setOrderPreviewUri(accountsUri);
 		apiResource.setOptionsChainUri(optionsChainUri);
+		apiResource.setAccountIdKey(accountIdKey);
 		return apiResource;
 	}
 

@@ -8,6 +8,7 @@ import java.util.Properties;
 public class AppConfig {
   public static final String[] watchlist;
   public static final double arbitrageStrength;
+  public static final double targetGainPercentage;
 
   static {
     ClassLoader classloader = Thread.currentThread().getContextClassLoader();
@@ -16,6 +17,7 @@ public class AppConfig {
       props.load(in);
       watchlist = props.getProperty("watchlist").split(",");
       arbitrageStrength = Double.parseDouble(props.getProperty("arbitrageStrength"));
+      targetGainPercentage = Double.parseDouble(props.getProperty("targetGainPercentage"));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
