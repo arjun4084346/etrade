@@ -28,7 +28,10 @@ public class PortfolioClient extends Client {
 	}
 
 	public String getURL(String accountIdkKey) {
-        return String.format("%s%s%s", getURL(), accountIdkKey, "/portfolio");
+        return String.format("%s%s%s",
+						getURL(),
+						accountIdkKey == null ? apiResource.getAccountIdKey() : accountIdkKey,
+						"/portfolio");
 	}
 
 	public String getQueryParam() {
@@ -40,6 +43,9 @@ public class PortfolioClient extends Client {
 		return String.format("%s%s", apiResource.getApiBaseUrl(), apiResource.getPortfolioUri());
 	}
 
+	public String getPortfolio() throws ApiException {
+		return getPortfolio(null);
+	}
 	public String getPortfolio(final String accountIdKey) throws ApiException{
 		log.debug(" Calling Portfolio API " + getURL(accountIdKey));
 

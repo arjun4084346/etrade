@@ -168,6 +168,9 @@ public class ETClientApp extends AppCommandLine {
 				case 5:
 					findArbitrageOpportunities();
 					break;
+				case 6:
+					managePortfolio();
+					break;
 				default:
 					out.println("Invalid Option :");
 					choice = 'x';
@@ -741,6 +744,46 @@ public class ETClientApp extends AppCommandLine {
 		double intrinsic = (Double) put.get("strikePrice") < currentPrice ? 0.0 : strikePrice - currentPrice;
 
 		return Math.max(0.0, putPrice - intrinsic) * 100;
+	}
+
+	private void managePortfolio() {
+		PortfolioClient client = ctx.getBean(PortfolioClient.class);
+
+		try {
+			String response = client.getPortfolio();
+			JSONParser jsonParser = new JSONParser();
+
+			JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
+			JSONObject portfolioResponse = (JSONObject) jsonObject.get("PortfolioResponse");
+			JSONArray accountPortfolioArr = (JSONArray) portfolioResponse.get("AccountPortfolio");
+
+			for (Object value : accountPortfolioArr) {
+				JSONObject acctObj = (JSONObject) value;
+				JSONArray positionArr = (JSONArray) acctObj.get("Position");
+
+				for (Object o : positionArr) {
+					JSONObject innerObj = (JSONObject) o;
+					percentageGainManagement(innerObj);
+				}
+			}
+		} catch(ApiException e) {
+			handleApiException(e);
+		} catch (Exception e) {
+			log.error(" getPortfolio ", e);
+			out.println();
+			out.println(String.format("Message: %23s", e.getMessage()));
+			out.println();
+			out.println();
+		}
+	}
+
+	private void percentageGainManagement(JSONObject innerObj) {
+		if (Double.class.isAssignableFrom(innerObj.get("totalGainPct").getClass())) {
+			double totalPercentageGain = (double) innerObj.get("totalGainPct");
+			if (totalPercentageGain > AppConfig.targetGainPercentage) {
+				out.println("Target achieved for : " + innerObj.get("symbolDescription"));
+			}
+		}
 	}
 
 	private void getOrders(final String acctIndex) {

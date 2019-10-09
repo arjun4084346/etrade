@@ -16,4 +16,5 @@ public class ApiResource {
 	private String orderListUri;
 	private String orderPreviewUri;
 	private String optionsChainUri;
+	private String accountIdKey;
 }
