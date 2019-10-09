@@ -695,6 +695,8 @@ public class ETClientApp extends AppCommandLine {
 
 	private void processOptionsChain(double currentPrice, JSONObject optionsChain) {
 		JSONArray optionPair = (JSONArray) optionsChain.get("OptionPair");
+		DecimalFormat format = new DecimalFormat("#.00");
+
 		for (Object o : optionPair) {
 			JSONObject callPutPair = (JSONObject) o;
 			JSONObject call = (JSONObject) callPutPair.get("Call");
@@ -719,7 +721,8 @@ public class ETClientApp extends AppCommandLine {
 			// interest = prt/100 => r = interest * 100 / pt
 			double annualArbitragePercentage = annualArbitrage * 100 / margin;
 			if (annualArbitragePercentage >= AppConfig.arbitrageStrength) {
-				out.println(call.get("optionRootSymbol") + " :: " + expiry + " :: " + call.get("strikePrice"));
+				out.println(call.get("optionRootSymbol") + " :: " + expiry + " :: " +
+						call.get("strikePrice") + " :: " + format.format(annualArbitragePercentage));
 			}
 		}
 	}
