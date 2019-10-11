@@ -1,7 +1,8 @@
 package com.etrade.exampleapp.v1.clients.order;
 
 import static com.etrade.exampleapp.v1.terminal.ETClientApp.out;
-import com.etrade.exampleapp.v1.terminal.ETClientApp;
+
+import com.etrade.exampleapp.v1.Utils;
 import java.io.StringWriter;
 import java.util.Formatter;
 import java.util.HashMap;
@@ -140,7 +141,7 @@ public class OrderPreviewClient extends Client {
 			log.debug(response);
 			parseResponse(response);
 		} catch(ApiException e) {
-			ETClientApp.handleApiException(e);
+			Utils.handleApiException(e);
 		}
 		catch (Exception e) {
 			log.error(" getBalance : GenericException ", e);

@@ -37,7 +37,7 @@ public class AppController {
 	private ApiResource apiResource;
 
 	/*api used by all clients*/
-	public String invoke(Message message) throws ApiException{
+	public String invoke(Message message) throws ApiException {
 		log.debug(" invoke method controller...."+context.isIntialized());
 
 		if (!context.isIntialized() && message.getOauthRequired() == OauthRequired.YES) {
