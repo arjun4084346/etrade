@@ -5,10 +5,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -34,12 +30,13 @@ import com.etrade.exampleapp.v1.clients.accounts.PortfolioClient;
 import com.etrade.exampleapp.v1.clients.market.QuotesClient;
 import com.etrade.exampleapp.v1.clients.order.OrderClient;
 import com.etrade.exampleapp.v1.clients.order.OrderPreviewClient;
-import com.etrade.exampleapp.v1.clients.order.OrderTerm;
-import com.etrade.exampleapp.v1.clients.order.PriceType;
 import com.etrade.exampleapp.v1.exception.ApiException;
 
+import static com.etrade.exampleapp.v1.Utils.*;
+
+
 public class ETClientApp extends AppCommandLine {
-	protected Logger log = Logger.getLogger(ETClientApp.class);
+	private Logger log = Logger.getLogger(ETClientApp.class);
 	private AnnotationConfigApplicationContext ctx = null;
 	private Map<String, String> acctListMap = new HashMap<>();
 	private boolean isLive = false;
@@ -100,7 +97,7 @@ public class ETClientApp extends AppCommandLine {
 		}
 
 		try {
-			obj.keyMenu(obj);
+			obj.keyMenu();
 		} catch (NumberFormatException e) {
 			System.out.println(" Main menu : NumberFormatException ");
 		} catch (IOException e) {
@@ -108,8 +105,8 @@ public class ETClientApp extends AppCommandLine {
 		}
 	}
 
-	private void keyMenu(ETClientApp obj) throws NumberFormatException, IOException {
-		int choice = 0;
+	private void keyMenu() throws NumberFormatException, IOException {
+		int choice;
 
 		do {
 			printKeyMenu();
@@ -158,7 +155,7 @@ public class ETClientApp extends AppCommandLine {
 					break;
 				case 3:
 					out.println("Back to previous menu");
-					keyMenu(this);
+					keyMenu();
 					break;
 				case 4:
 					out.println("Please enter stock symbol: ");
@@ -314,15 +311,6 @@ public class ETClientApp extends AppCommandLine {
 		} catch (Exception e) {
 			log.error(" getAccountList : GenericException ", e);
 		}
-	}
-
-	public static void handleApiException(ApiException e) {
-		out.println();
-		out.println(String.format("HttpStatus: %20s", e.getHttpStatus()));
-		out.println(String.format("Message: %23s", e.getMessage()));
-		out.println(String.format("Error Code: %20s", e.getCode()));
-		out.println();
-		out.println();
 	}
 
 	private void getBalance(String acctIndex) {
@@ -620,39 +608,6 @@ public class ETClientApp extends AppCommandLine {
 		}
 	}
 
-	// Not well tested
-	private double getCurrentMidPrice(String symbol) {
-		QuotesClient client = ctx.getBean(QuotesClient.class);
-
-		try {
-			String response = client.getQuotes(symbol);
-			try {
-				JSONParser jsonParser = new JSONParser();
-				JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
-				JSONObject quoteResponse = (JSONObject) jsonObject.get("QuoteResponse");
-				JSONArray quoteData = (JSONArray) quoteResponse.get("QuoteData");
-
-				if (quoteData != null) {
-					for (Object quoteDatum : quoteData) {
-						JSONObject innerObj = (JSONObject) quoteDatum;
-						JSONObject all = (JSONObject) innerObj.get("All");
-						return ((Double) all.get("bid") + (Double) all.get("ask")) / 2;
-					}
-				} else {
-					log.error(" Error : Invalid stock symbol.");
-					out.println("Error : Invalid Stock Symbol.\n");
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		} catch(ApiException e) {
-			handleApiException(e);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		return 0.0;
-	}
-
 	private JSONObject getOptionsChain(String symbol, List<Pair> queryParams) {
 		OptionsChainClient client = ctx.getBean(OptionsChainClient.class);
 
@@ -687,7 +642,7 @@ public class ETClientApp extends AppCommandLine {
 
 		for (String symbol : AppConfig.watchlist) {
 			queryParams.add(Pair.of("symbol", symbol));
-			double currentPrice = getCurrentMidPrice(symbol);
+			double currentPrice = getCurrentMidPrice(ctx, symbol);
 			//String noOfStrikes = String.valueOf(Math.round(Double.valueOf(currentPrice)/10));
 			//queryParams.add(Pair.of("noOfStrikes", noOfStrikes));
 			JSONObject optionsChain = getOptionsChain(symbol, queryParams);
@@ -718,6 +673,9 @@ public class ETClientApp extends AppCommandLine {
 			double extrinsicCall = getExtrinsicOfCall(currentPrice, call);
 			double extrinsicPut = getExtrinsicOfPut(currentPrice, put);
 			double arbitrage = extrinsicCall - extrinsicPut;
+			// TODO : how much to subtract so it get filled?
+			// is the option penny incremental?
+			arbitrage -= 2;
 			double annualArbitrage = (arbitrage/daysToExpiry) * 365;
 			// assuming 25% margin requirement
 			double margin = currentPrice * 25;
@@ -730,50 +688,51 @@ public class ETClientApp extends AppCommandLine {
 		}
 	}
 
-	private double getExtrinsicOfCall (double currentPrice, JSONObject call) {
-		double strikePrice = (Double) call.get("strikePrice");
-		double callPrice = ((Double) call.get("bid") + (Double) call.get("ask")) / 2;
-		double intrinsic = (Double) call.get("strikePrice") > currentPrice ? 0.0 : currentPrice - strikePrice;
-
-		return Math.max(0.0, callPrice - intrinsic) * 100;
-	}
-
-	private double getExtrinsicOfPut (double currentPrice, JSONObject put) {
-		double strikePrice = (Double) put.get("strikePrice");
-		double putPrice = ((Double) put.get("bid") + (Double) put.get("ask")) / 2;
-		double intrinsic = (Double) put.get("strikePrice") < currentPrice ? 0.0 : strikePrice - currentPrice;
-
-		return Math.max(0.0, putPrice - intrinsic) * 100;
-	}
-
 	private void managePortfolio() {
-		PortfolioClient client = ctx.getBean(PortfolioClient.class);
+		Map<String, List<JSONObject>> positionGroups = getPositions(ctx);
 
-		try {
-			String response = client.getPortfolio();
-			JSONParser jsonParser = new JSONParser();
-
-			JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
-			JSONObject portfolioResponse = (JSONObject) jsonObject.get("PortfolioResponse");
-			JSONArray accountPortfolioArr = (JSONArray) portfolioResponse.get("AccountPortfolio");
-
-			for (Object value : accountPortfolioArr) {
-				JSONObject acctObj = (JSONObject) value;
-				JSONArray positionArr = (JSONArray) acctObj.get("Position");
-
-				for (Object o : positionArr) {
-					JSONObject innerObj = (JSONObject) o;
-					percentageGainManagement(innerObj);
-				}
+		for (Map.Entry<String, List<JSONObject>> entry : positionGroups.entrySet()) {
+			OptionsStrategy optionsStrategy = identityPositionType(entry.getValue());
+			if (optionsStrategy == OptionsStrategy.SHORT_STRANGLE) {
+				manageShortStrangle(entry.getValue());
+			} else if (optionsStrategy == OptionsStrategy.LONG_ARBITRAGE) {
+				manageLongArbitrage(entry.getKey(), entry.getValue());
 			}
-		} catch(ApiException e) {
-			handleApiException(e);
-		} catch (Exception e) {
-			log.error(" getPortfolio ", e);
-			out.println();
-			out.println(String.format("Message: %23s", e.getMessage()));
-			out.println();
-			out.println();
+			// TODO : add more management strategies
+		}
+	}
+
+	private void manageShortStrangle(List<JSONObject> positions) {
+		for (JSONObject position : positions) {
+			percentageGainManagement(position);
+		}
+	}
+
+	private void manageLongArbitrage(String symbol, List<JSONObject> positions) {
+		double shortCallPrice = 0;
+		double longPutPrice = 0;
+		double strikePrice = 0;
+
+		for (JSONObject position : positions) {
+			PositionType positionType = PositionType.valueOf((String) position.get("positionType"));
+
+			if (((JSONObject) position.get("Product")).get("securityType").equals(SecurityType.EQ.name())) {
+				continue;
+			}
+			if (positionType == PositionType.LONG) {
+				String putSymbol = getSymbolFromQuoteDetails((String) position.get("quoteDetails"));
+				longPutPrice = getCurrentMidPrice(ctx, putSymbol);
+				strikePrice = (Double) ((JSONObject)position.get("Product")).get("strikePrice");
+			} else if (positionType == PositionType.SHORT) {
+				String callSymbol = getSymbolFromQuoteDetails((String) position.get("quoteDetails"));
+				shortCallPrice = getCurrentMidPrice(ctx, callSymbol);
+			}
+		}
+
+		// TODO : do we want to close out this position in favour of other better opportunity?
+		// take into account the free capital
+		if (getExtrinsicValue(strikePrice, longPutPrice, OptionsType.PUT) >= getExtrinsicValue(strikePrice, shortCallPrice, OptionsType.CALL)) {
+			out.println("adjust arbitrage on " + symbol);
 		}
 	}
 
@@ -829,43 +788,12 @@ public class ETClientApp extends AppCommandLine {
 				out.println(" Error : !!! Invalid account index selected !!! ");
 			}
 		} catch (Exception e) {
-			log.error(" getAccountIdKeyForIndex " ,e);
+			log.error(" getAccountIdKeyForIndex ", e);
 		}
 
 		if (accountIdKey == null) {
 			throw new ApiException(0, "0","Invalid selection for accountId index");
 		}
 		return accountIdKey;
-	}
-
-	private String getPrice(PriceType priceType, JSONObject orderDetail) {
-		String value;
-
-		if (PriceType.LIMIT == priceType ) {
-			value = String.valueOf(orderDetail.get("limitPrice"));
-		} else if( PriceType.MARKET == priceType) {
-			value = "Mkt";
-		} else {
-			value = priceType.getValue();
-		}
-		return value;
-	}
-
-	private String getTerm(OrderTerm orderTerm) {
-		String value;
-
-		if (OrderTerm.GOOD_FOR_DAY == orderTerm) {
-			value = "Day";
-		} else {
-			value = orderTerm.getValue();
-		}
-
-		return value;
-	}
-
-	private String convertLongToDate(Long ldate) {
-		LocalDateTime dte = LocalDateTime.ofInstant(Instant.ofEpochMilli(ldate), ZoneId.systemDefault());
-		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd/yy");
-		return formatter.format(dte);
 	}
 }
