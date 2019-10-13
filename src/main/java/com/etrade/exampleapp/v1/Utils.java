@@ -7,11 +7,13 @@ import com.etrade.exampleapp.v1.clients.order.PriceType;
 import com.etrade.exampleapp.v1.exception.ApiException;
 import com.etrade.exampleapp.v1.terminal.ETClientApp;
 import java.io.PrintStream;
+import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -168,9 +170,13 @@ public class Utils {
       }
     }
 
-    if (numOfShortCalls == numOfShortPuts) {
+    if (numOfLongCalls == 0
+        && numOfLongPuts == 0
+        && numOfShortCalls == numOfShortPuts) {
       return OptionsStrategy.SHORT_STRANGLE;
-    } else if (numOfShortCalls == numOfLongPuts && numOfShares == 100 * numOfLongPuts) {
+    } else if (numOfLongPuts > 0
+        && numOfShortCalls == numOfLongPuts
+        && numOfShares == 100 * numOfLongPuts) {
       return OptionsStrategy.LONG_ARBITRAGE;
     }
 
@@ -179,7 +185,22 @@ public class Utils {
 
   public static String getSymbolFromQuoteDetails(String quoteDetail) {
     int index = quoteDetail.lastIndexOf('/');
-    return quoteDetail.substring(index);
+    return quoteDetail.substring(index + 1);
+  }
+
+  public static Date getExpiryFromJson(JSONObject object, String key) {
+    String[] quoteDetail = ((String) object.get(key)).split(":");
+    // e.g. https://api.etrade.com/v1/market/quote/TSLA:2019:11:22:CALL:257.500000
+    String expiry = quoteDetail[2] + ":" + quoteDetail[3] + ":" + quoteDetail[4];
+    try {
+      return new SimpleDateFormat("yyyy:MM:dd").parse(expiry);
+    } catch (java.text.ParseException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public static int getDaysToExpiry(Date expiryDate) {
+    return (int) ((expiryDate.getTime() - System.currentTimeMillis()) / (24 * 60 * 60 * 1000));
   }
 
   public static String getPrice(PriceType priceType, JSONObject orderDetail) {

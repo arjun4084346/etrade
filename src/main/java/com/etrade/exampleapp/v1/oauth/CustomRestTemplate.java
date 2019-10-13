@@ -20,7 +20,7 @@ import com.etrade.exampleapp.v1.oauth.model.Message;
  * Rest template that is able to make rest call by adding oauth related headers
  *
  */
-public class CustomRestTemplate  extends RestTemplate{
+public class CustomRestTemplate  extends RestTemplate {
 
 	protected Logger log = Logger.getLogger(CustomRestTemplate.class);
 
@@ -29,7 +29,7 @@ public class CustomRestTemplate  extends RestTemplate{
 	}
 
 	<T> ResponseEntity<LinkedMultiValueMap> execute(Message message) throws ApiException {
-		MultiValueMap<String, String> headers = new LinkedMultiValueMap<String, String>();
+		MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
 
 		headers.add("Content-type", MediaType.APPLICATION_FORM_URLENCODED.toString());
 		log.debug("Oauth Header"+message.getOauthHeader());
@@ -42,7 +42,7 @@ public class CustomRestTemplate  extends RestTemplate{
 		ResponseEntity<LinkedMultiValueMap> response = null;
 
 		try {
-			HttpEntity<String> entity = new HttpEntity<String>(headers);
+			HttpEntity<String> entity = new HttpEntity<>(headers);
 			response = super.exchange(uriComponents.toString(), HttpMethod.valueOf(message.getHttpMethod()), entity, LinkedMultiValueMap.class);
 		} catch(Exception e) {
 			log.error("Failed calling service",e);
@@ -59,10 +59,9 @@ public class CustomRestTemplate  extends RestTemplate{
 		return response;
 	}
 
-	String doExecute(Message message) throws ApiException{
-
+	String doExecute(Message message) {
 		String jsonResponse = "";
-		String url = "";
+		String url;
 
 		MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
 		if (StringUtils.isNotBlank(message.getOauthHeader())) {
@@ -83,7 +82,7 @@ public class CustomRestTemplate  extends RestTemplate{
 			ResponseEntity<String> response = super.exchange(url, HttpMethod.GET, entity, String.class);
 			return response.getBody();
 		} else if("POST".equalsIgnoreCase(message.getHttpMethod())) {
-			HttpEntity<String> request = new HttpEntity<String>(message.getBody(),headers);
+			HttpEntity<String> request = new HttpEntity<>(message.getBody(), headers);
 			jsonResponse = super.postForObject(uriComponents.toString(), request, String.class);
 		}
 
