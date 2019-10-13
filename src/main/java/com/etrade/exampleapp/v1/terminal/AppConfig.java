@@ -9,6 +9,7 @@ public class AppConfig {
   public static final String[] watchlist;
   public static final double arbitrageStrength;
   public static final double targetGainPercentage;
+  public static final int criticalDTE;
 
   static {
     ClassLoader classloader = Thread.currentThread().getContextClassLoader();
@@ -18,6 +19,7 @@ public class AppConfig {
       watchlist = props.getProperty("watchlist").split(",");
       arbitrageStrength = Double.parseDouble(props.getProperty("arbitrageStrength"));
       targetGainPercentage = Double.parseDouble(props.getProperty("targetGainPercentage"));
+      criticalDTE = Integer.parseInt(props.getProperty("criticalDTE"));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

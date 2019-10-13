@@ -86,13 +86,13 @@ public class AppController {
 				throw new ApiException(500, "500", "Internal Failure");
 			}
 		} catch (Exception e) {
-			log.error(" Error Calling service api ",e);
+			log.error(" Error Calling service api ", e);
 			log.error("Exception class name " + e.getClass().getName());
 			if (ApiException.class.isAssignableFrom(e.getCause().getClass())) {
 				log.error(" ApiException found ");
 				throw e;
 			} else
-				throw new ApiException(500,"500","Internal Failure");
+				throw new ApiException(500, "500", "Internal Failure");
 		}
 
 		return response;
@@ -100,6 +100,7 @@ public class AppController {
 
 	private Message createRequestTokenMessage() {
 		Message msg = new Message();
+
 		msg.setOauthRequired(OauthRequired.YES);
 		msg.setHttpMethod(context.getResouces().getRequestTokenHttpMethod());
 		msg.setUrl(context.getResouces().getRequestTokenUrl());

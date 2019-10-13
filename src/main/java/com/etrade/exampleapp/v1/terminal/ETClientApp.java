@@ -632,18 +632,23 @@ public class ETClientApp extends AppCommandLine {
 		String optionCategory = "ALL";
 		String includeWeekly = "true";
 		List<Pair> queryParams = new ArrayList<>();
+		// definitily required
 		queryParams.add(Pair.of("includeWeekly", "true"));
-		queryParams.add(Pair.of("expiryDay", "25"));
+		queryParams.add(Pair.of("optionCategory", "ALL"));
+
+		// include?
+		queryParams.add(Pair.of("priceType", "ALL"));
+
+		//queryParams.add(Pair.of("expiryDay", "25"));
 		queryParams.add(Pair.of("expiryYear", "2019"));
 		queryParams.add(Pair.of("expiryMonth", "10"));
-		queryParams.add(Pair.of("optionCategory", "ALL"));
 		queryParams.add(Pair.of("noOfStrikes", "4"));
 
 
 		for (String symbol : AppConfig.watchlist) {
 			queryParams.add(Pair.of("symbol", symbol));
 			double currentPrice = getCurrentMidPrice(ctx, symbol);
-			//String noOfStrikes = String.valueOf(Math.round(Double.valueOf(currentPrice)/10));
+			String noOfStrikes = String.valueOf(Math.round(currentPrice/10));
 			//queryParams.add(Pair.of("noOfStrikes", noOfStrikes));
 			JSONObject optionsChain = getOptionsChain(symbol, queryParams);
 			processOptionsChain(currentPrice, optionsChain);
@@ -659,18 +664,11 @@ public class ETClientApp extends AppCommandLine {
 			JSONObject callPutPair = (JSONObject) o;
 			JSONObject call = (JSONObject) callPutPair.get("Call");
 			JSONObject put = (JSONObject) callPutPair.get("Put");
-			String[] quoteDetail = ((String) call.get("quoteDetail")).split(":");
-			// e.g. https://api.etrade.com/v1/market/quote/TSLA:2019:11:22:CALL:257.500000
 
-			String expiry = quoteDetail[2] + ":" + quoteDetail[3] + ":" + quoteDetail[4];
-			Date expiryDate;
-			try {
-				expiryDate = new SimpleDateFormat("yyyy:MM:dd").parse(expiry);
-			} catch (java.text.ParseException e) {
-				throw new RuntimeException(e);
-			}
-			int daysToExpiry = (int) (expiryDate.getTime() - System.currentTimeMillis()) / (24 * 60 * 60 * 1000);
-			double extrinsicCall = getExtrinsicOfCall(currentPrice, call);
+			Date expiryDate = getExpiryFromJson(call, "quoteDetail");
+      int daysToExpiry = getDaysToExpiry(expiryDate);
+
+      double extrinsicCall = getExtrinsicOfCall(currentPrice, call);
 			double extrinsicPut = getExtrinsicOfPut(currentPrice, put);
 			double arbitrage = extrinsicCall - extrinsicPut;
 			// TODO : how much to subtract so it get filled?
@@ -682,8 +680,8 @@ public class ETClientApp extends AppCommandLine {
 			// interest = prt/100 => r = interest * 100 / pt
 			double annualArbitragePercentage = annualArbitrage * 100 / margin;
 			if (annualArbitragePercentage >= AppConfig.arbitrageStrength) {
-				out.println(call.get("optionRootSymbol") + " :: " + expiry + " :: " +
-						call.get("strikePrice") + " :: " + format.format(annualArbitragePercentage));
+				out.println(call.get("optionRootSymbol") + " :: " + expiryDate+ " :: " +
+						call.get("strikePrice") + " :: " + format.format(annualArbitragePercentage) + "%");
 			}
 		}
 	}
@@ -705,6 +703,8 @@ public class ETClientApp extends AppCommandLine {
 	private void manageShortStrangle(List<JSONObject> positions) {
 		for (JSONObject position : positions) {
 			percentageGainManagement(position);
+			gammaManagement(position);
+			// TODO manage one itm leg
 		}
 	}
 
@@ -736,14 +736,22 @@ public class ETClientApp extends AppCommandLine {
 		}
 	}
 
-	private void percentageGainManagement(JSONObject innerObj) {
-		if (Double.class.isAssignableFrom(innerObj.get("totalGainPct").getClass())) {
-			double totalPercentageGain = (double) innerObj.get("totalGainPct");
+	private void percentageGainManagement(JSONObject position) {
+		if (Double.class.isAssignableFrom(position.get("totalGainPct").getClass())) {
+			double totalPercentageGain = (double) position.get("totalGainPct");
 			if (totalPercentageGain > AppConfig.targetGainPercentage) {
-				out.println("Target achieved for : " + innerObj.get("symbolDescription"));
+				out.println("Target achieved for : " + position.get("symbolDescription"));
 			}
 		}
 	}
+
+	private void gammaManagement(JSONObject position) {
+    Date expiryDate = getExpiryFromJson(position, "quoteDetails");
+    int daysToExpiry = getDaysToExpiry(expiryDate);
+    if (daysToExpiry <= AppConfig.criticalDTE) {
+			out.println("Position " + position.get("symbolDescription") + " too close to expiry.");
+		}
+  }
 
 	private void getOrders(final String acctIndex) {
 		OrderClient client = ctx.getBean(OrderClient.class);
