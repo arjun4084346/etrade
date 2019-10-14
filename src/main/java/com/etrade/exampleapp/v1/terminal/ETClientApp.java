@@ -231,7 +231,7 @@ public class ETClientApp extends AppCommandLine {
 
 	public void previewOrder(){
 		OrderPreviewClient client = ctx.getBean(OrderPreviewClient.class);
-		Map<String,String> inputs = client.getOrderDataMap();
+		Map<String, String> inputs = client.getOrderDataMap();
 		String accountIdKey;
 		out.print("Please select an account index for which you want to preview Order: ");
 		String acctKeyIndex = KeyIn.getKeyInString();
@@ -665,22 +665,22 @@ public class ETClientApp extends AppCommandLine {
 			JSONObject call = (JSONObject) callPutPair.get("Call");
 			JSONObject put = (JSONObject) callPutPair.get("Put");
 
-			Date expiryDate = getExpiryFromJson(call, "quoteDetail");
+			Calendar expiryDate = getExpiryFromJson(call, "quoteDetail");
       int daysToExpiry = getDaysToExpiry(expiryDate);
 
       double extrinsicCall = getExtrinsicOfCall(currentPrice, call);
 			double extrinsicPut = getExtrinsicOfPut(currentPrice, put);
 			double arbitrage = extrinsicCall - extrinsicPut;
 			// TODO : how much to subtract so it get filled?
-			// is the option penny incremental?
+			//  again difficult, may depend upon moneyness!
+			//  is the option penny incremental?
 			arbitrage -= 2;
 			double annualArbitrage = (arbitrage/daysToExpiry) * 365;
-			// assuming 25% margin requirement
-			double margin = currentPrice * 25;
+			double margin = currentPrice * getMarginPercentage();
 			// interest = prt/100 => r = interest * 100 / pt
 			double annualArbitragePercentage = annualArbitrage * 100 / margin;
 			if (annualArbitragePercentage >= AppConfig.arbitrageStrength) {
-				out.println(call.get("optionRootSymbol") + " :: " + expiryDate+ " :: " +
+				out.println(call.get("optionRootSymbol") + " :: " + expiryDate.get(Calendar.YEAR) + "/" + (expiryDate.get(Calendar.MONTH) + 1) + "/" + expiryDate.get(Calendar.DAY_OF_MONTH) + " :: " +
 						call.get("strikePrice") + " :: " + format.format(annualArbitragePercentage) + "%");
 			}
 		}
@@ -746,7 +746,7 @@ public class ETClientApp extends AppCommandLine {
 	}
 
 	private void gammaManagement(JSONObject position) {
-    Date expiryDate = getExpiryFromJson(position, "quoteDetails");
+    Calendar expiryDate = getExpiryFromJson(position, "quoteDetails");
     int daysToExpiry = getDaysToExpiry(expiryDate);
     if (daysToExpiry <= AppConfig.criticalDTE) {
 			out.println("Position " + position.get("symbolDescription") + " too close to expiry.");
