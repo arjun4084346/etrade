@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +29,7 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 public class Utils {
   private final static PrintStream out = System.out;
   private final static Logger log = Logger.getLogger(ETClientApp.class);
+  private final static long MILLIS_IN_A_DAY = 24 * 60 * 60 * 1000L;
 
   public static void handleApiException(ApiException e) {
     out.println();
@@ -188,19 +190,25 @@ public class Utils {
     return quoteDetail.substring(index + 1);
   }
 
-  public static Date getExpiryFromJson(JSONObject object, String key) {
+  public static Calendar getExpiryFromJson(JSONObject object, String key) {
     String[] quoteDetail = ((String) object.get(key)).split(":");
     // e.g. https://api.etrade.com/v1/market/quote/TSLA:2019:11:22:CALL:257.500000
-    String expiry = quoteDetail[2] + ":" + quoteDetail[3] + ":" + quoteDetail[4];
-    try {
-      return new SimpleDateFormat("yyyy:MM:dd").parse(expiry);
-    } catch (java.text.ParseException e) {
-      throw new RuntimeException(e);
-    }
+    Calendar expiryDate = Calendar.getInstance();
+    expiryDate.set(Integer.parseInt(quoteDetail[2]), Integer.parseInt(quoteDetail[3]) - 1, Integer.parseInt(quoteDetail[4]));
+    return expiryDate;
   }
 
-  public static int getDaysToExpiry(Date expiryDate) {
-    return (int) ((expiryDate.getTime() - System.currentTimeMillis()) / (24 * 60 * 60 * 1000));
+  public static int getDaysToExpiry(Calendar expiryDate) {
+    return (int) ((expiryDate.getTimeInMillis() - System.currentTimeMillis()) / MILLIS_IN_A_DAY);
+  }
+
+  // TODO : difficult to calculate,
+  //  MARGIN CAN DEPEND ON STRIKE PRICE!!!
+  //  maybe just use preview client?
+  //  margin = orderpreviewclient.get("currentOrderImpact")
+  public static int getMarginPercentage() {
+    // assuming 50% margin requirement
+    return 50;
   }
 
   public static String getPrice(PriceType priceType, JSONObject orderDetail) {
@@ -238,6 +246,10 @@ public class Utils {
     SHORT_STRANGLE,
     SHORT_STRADDLE,
     LONG_ARBITRAGE,
+    SHORT_DIAGONAL,
+    LONG_DIAGONAL,
+    SHORT_ARBITRAGE,  // TODO : so difficult to manage,
+    // take dividend into account, notice if drop happens only on one day or gradually?
     CREDIT_SPREAD,
     SHORT_BROKEN_WING_BUTTERFLY,
     UNSUPPORTED
