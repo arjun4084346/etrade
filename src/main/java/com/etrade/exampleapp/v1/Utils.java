@@ -248,8 +248,9 @@ public class Utils {
     LONG_ARBITRAGE,
     SHORT_DIAGONAL,
     LONG_DIAGONAL,
-    SHORT_ARBITRAGE,  // TODO : so difficult to manage,
+    SHORT_ARBITRAGE,  // TODO : so difficult to find and manage,
     // take dividend into account, notice if drop happens only on one day or gradually?
+    // also if the security is hard to borrow? whats the interest rate, if any?
     CREDIT_SPREAD,
     SHORT_BROKEN_WING_BUTTERFLY,
     UNSUPPORTED
