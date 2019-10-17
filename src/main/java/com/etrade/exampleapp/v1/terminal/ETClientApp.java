@@ -4,7 +4,6 @@ import com.etrade.exampleapp.v1.clients.accounts.OptionsChainClient;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.text.DecimalFormat;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -42,6 +41,8 @@ public class ETClientApp extends AppCommandLine {
 	private boolean isLive = false;
 	public final static String lineSeparator = System.lineSeparator();
 	public final static PrintStream out = System.out;
+	public static final String ANSI_GREEN = "\u001B[32m";
+	public static final String ANSI_RESET = "\u001B[0m";
 
 	public ETClientApp(String[] args) {
 		super(args);
@@ -97,7 +98,7 @@ public class ETClientApp extends AppCommandLine {
 		}
 
 		try {
-			obj.keyMenu();
+			obj.keyMenu(args);
 		} catch (NumberFormatException e) {
 			System.out.println(" Main menu : NumberFormatException ");
 		} catch (IOException e) {
@@ -105,24 +106,27 @@ public class ETClientApp extends AppCommandLine {
 		}
 	}
 
-	private void keyMenu() throws NumberFormatException, IOException {
+	private void keyMenu(String[] args) throws NumberFormatException, IOException {
 		int choice;
+		String arg = "";
 
 		do {
-			printKeyMenu();
-			choice = KeyIn.getKeyInInteger();
+			if (args.length > 0) {
+				choice = 2;
+				arg = args[0];
+			} else {
+				printKeyMenu();
+				choice = KeyIn.getKeyInInteger();
+			}
 			switch (choice) {
 				case 1:
 					log.debug(" Initializing sandbox application context..");
 					isLive = false;
-					init(isLive);
-					mainMenu(this);
-					break;
 				case 2:
+					log.debug(" Initializing Live application context..");
 					isLive = true;
 					init(isLive);
-					log.debug(" Initializing Live application context..");
-					mainMenu(this);
+					mainMenu(this, arg);
 					break;
 				case 'x':
 					out.println("Goodbye");
@@ -134,12 +138,21 @@ public class ETClientApp extends AppCommandLine {
 		} while (true);
 	}
 
-	private void mainMenu(ETClientApp obj) throws NumberFormatException, IOException {
-		int choice;
+	private void mainMenu(ETClientApp obj, String arg) throws NumberFormatException, IOException {
+		int choice = 0;
 
 		do {
-			printMainMenu();
-			choice = KeyIn.getKeyInInteger();
+			if (arg.length() > 0) {
+				if (arg.equals("find")) {
+					choice = 5;
+				} else if (arg.equals("manage")) {
+					choice = 6;
+				}
+			} else {
+				printMainMenu();
+				choice = KeyIn.getKeyInInteger();
+			}
+
 			switch (choice) {
 				case 1:
 					out.println(" Input selected for main menu : "+ choice);
@@ -155,7 +168,7 @@ public class ETClientApp extends AppCommandLine {
 					break;
 				case 3:
 					out.println("Back to previous menu");
-					keyMenu();
+					keyMenu(new String[]{});
 					break;
 				case 4:
 					out.println("Please enter stock symbol: ");
@@ -220,7 +233,7 @@ public class ETClientApp extends AppCommandLine {
 					break;
 				case 4:
 					out.println("Going to main menu");
-					obj.mainMenu(obj);
+					obj.mainMenu(obj, "");
 					break;
 				default:
 					printSubMenu();
@@ -642,7 +655,7 @@ public class ETClientApp extends AppCommandLine {
 		//queryParams.add(Pair.of("expiryDay", "25"));
 		queryParams.add(Pair.of("expiryYear", "2019"));
 		queryParams.add(Pair.of("expiryMonth", "10"));
-		queryParams.add(Pair.of("noOfStrikes", "4"));
+		queryParams.add(Pair.of("noOfStrikes", "10"));
 
 
 		for (String symbol : AppConfig.watchlist) {
@@ -658,12 +671,20 @@ public class ETClientApp extends AppCommandLine {
 
 	private void processOptionsChain(double currentPrice, JSONObject optionsChain) {
 		JSONArray optionPair = (JSONArray) optionsChain.get("OptionPair");
-		DecimalFormat format = new DecimalFormat("#.00");
+//		DecimalFormat format = new DecimalFormat("#.00");
+
+		// option chain might be not available for that expiry for that symbol
+		if (optionPair == null) {
+			out.println("No option pair received.");
+			return;
+		}
 
 		for (Object o : optionPair) {
 			JSONObject callPutPair = (JSONObject) o;
 			JSONObject call = (JSONObject) callPutPair.get("Call");
 			JSONObject put = (JSONObject) callPutPair.get("Put");
+			boolean shortArbitrage = false;
+			boolean dividendRisk = false;
 
 			Calendar expiryDate = getExpiryFromJson(call, "quoteDetail");
       int daysToExpiry = getDaysToExpiry(expiryDate);
@@ -671,17 +692,78 @@ public class ETClientApp extends AppCommandLine {
       double extrinsicCall = getExtrinsicOfCall(currentPrice, call);
 			double extrinsicPut = getExtrinsicOfPut(currentPrice, put);
 			double arbitrage = extrinsicCall - extrinsicPut;
+			arbitrage = Math.round(arbitrage * 100) / 100.0;
+			double dividendAdjustageArbitrage = arbitrage;
+			if (arbitrage < 0) {
+				// shortArbitrage = !shortArbitrage;
+				//arbitrage = -arbitrage;
+				String symbol = getSymbolFromQuoteDetails((String) call.get("symbol"));
+				QuotesClient client = ctx.getBean(QuotesClient.class);
+
+				try {
+					String response = client.getQuotes(symbol);
+					log.debug(" Response String : " + response);
+					JSONParser jsonParser = new JSONParser();
+					JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
+					log.debug(" JSONObject : " + jsonObject);
+
+					JSONObject quoteResponse = (JSONObject) jsonObject.get("QuoteResponse");
+					JSONArray quoteData = (JSONArray) quoteResponse.get("QuoteData");
+
+
+					if (quoteData != null) {
+						for (Object quoteDatum : quoteData) {
+							JSONObject innerObj = (JSONObject) quoteDatum;
+							double dividend = (double) ((JSONObject) innerObj.get("All")).get("dividend");
+							long exDividendDate = (long) ((JSONObject) innerObj.get("All")).get("exDividendDate");
+							// dividend should not be applied if ex-dividend date is on the next day of the expiry date
+							// subtract 20000 seconds to avoid cases where both dates are almost same, time belongs to EOD
+							if (expiryDate.getTimeInMillis() >= (exDividendDate-20000)*1000 &&
+									System.currentTimeMillis() <= (exDividendDate-20000)*1000) {// >= 24 * 60 * 60 *1000L) {
+								//out.println("adding dividend");
+								dividendAdjustageArbitrage += dividend*100;
+								dividendRisk = true;
+								out.println("ex dividend date : " + new Date(exDividendDate * 1000).toString());
+							} else {
+								// this might be ok in some cases after adding new if condition
+								//out.println("not adding dividend");
+							}
+							break;
+						}
+					}
+
+				} catch (ApiException | ParseException e) {
+					log.error(e);
+				}
+			}
+
+			if (dividendAdjustageArbitrage < 0) {
+				// TODO : verify if security is hard-to-borrow
+				shortArbitrage = true;
+			}
+			dividendAdjustageArbitrage = Math.abs(dividendAdjustageArbitrage);
 			// TODO : how much to subtract so it get filled?
 			//  again difficult, may depend upon moneyness!
 			//  is the option penny incremental?
-			arbitrage -= 2;
-			double annualArbitrage = (arbitrage/daysToExpiry) * 365;
+			// double commissionAdjustedArbitrage = arbitrage < 0 ? arbitrage + 3 : arbitrage - 3;
+			double commissionAdjustedArbitrage = dividendAdjustageArbitrage - 3;
+
+			//arbitrage = Math.round(arbitrage*100)/100.0;
+			if (commissionAdjustedArbitrage <= 1) {
+				continue;
+			}
+
+			double annualArbitrage = (commissionAdjustedArbitrage/daysToExpiry) * 365;
 			double margin = currentPrice * getMarginPercentage();
 			// interest = prt/100 => r = interest * 100 / pt
 			double annualArbitragePercentage = annualArbitrage * 100 / margin;
-			if (annualArbitragePercentage >= AppConfig.arbitrageStrength) {
-				out.println(call.get("optionRootSymbol") + " :: " + expiryDate.get(Calendar.YEAR) + "/" + (expiryDate.get(Calendar.MONTH) + 1) + "/" + expiryDate.get(Calendar.DAY_OF_MONTH) + " :: " +
-						call.get("strikePrice") + " :: " + format.format(annualArbitragePercentage) + "%");
+			annualArbitragePercentage = Math.round(annualArbitragePercentage*100)/100.0;
+			if (Math.abs(annualArbitragePercentage) >= AppConfig.arbitrageStrength) {
+				out.println(call.get("optionRootSymbol") + " :: " +
+						expiryDate.get(Calendar.YEAR) + "/" + (expiryDate.get(Calendar.MONTH) + 1) + "/" + expiryDate.get(Calendar.DAY_OF_MONTH) + " :: " +
+						call.get("strikePrice") + " :: " + annualArbitragePercentage + "%" + " (" + dividendAdjustageArbitrage + ") " +
+						(shortArbitrage ? ANSI_GREEN + "[SHORT ARBITRAGE]" + ANSI_RESET : "") +
+						(dividendRisk ? ANSI_GREEN + "[DIVIDEND RISK]" + ANSI_RESET : ""));
 			}
 		}
 	}
@@ -691,22 +773,77 @@ public class ETClientApp extends AppCommandLine {
 
 		for (Map.Entry<String, List<JSONObject>> entry : positionGroups.entrySet()) {
 			OptionsStrategy optionsStrategy = identityPositionType(entry.getValue());
-			if (optionsStrategy == OptionsStrategy.SHORT_STRANGLE) {
-				manageShortStrangle(entry.getValue());
-			} else if (optionsStrategy == OptionsStrategy.LONG_ARBITRAGE) {
-				manageLongArbitrage(entry.getKey(), entry.getValue());
+			switch (optionsStrategy) {
+				case SHORT_STRANGLE:
+          manageShortStrangle(entry.getValue());
+					break;
+				case LONG_ARBITRAGE:
+					manageLongArbitrage(entry.getKey(), entry.getValue());
+					break;
+				case SHORT_STRADDLE:
+				// TODO : add more management strategies
+					//  short call management
+					//  short put management
+
+				default:
+					break;
 			}
-			// TODO : add more management strategies
 		}
 	}
 
-	private void manageShortStrangle(List<JSONObject> positions) {
-		for (JSONObject position : positions) {
-			percentageGainManagement(position);
-			gammaManagement(position);
-			// TODO manage one itm leg
-		}
-	}
+  private void manageShortStrangle(List<JSONObject> positions) {
+    for (JSONObject position : positions) {
+      percentageGainManagement(position);
+      timeManagement(position);
+      // TODO manage one itm leg
+    }
+  }
+
+//	private void manageShortStrangle(Pair<JSONObject, JSONObject> positions) {
+//		//boolean manage = profitManagement(positions.getLeft());
+//		List<JSONObject> pos = new ArrayList<>();
+//		pos.add(positions.getLeft());
+//		pos.add(positions.getRight());
+//		JSONObject pos1 = positions.getLeft();
+//		JSONObject pos2 = positions.getRight();
+//		double profit1 = profit(pos1);
+//		double profit1Percentage = profitPercentage(pos1);
+//		double profit2 = profit(pos2);
+//		double profit2Percentage = profitPercentage(pos2);
+//		double totalProfit = profit1 + profit2;
+//		double totalCost = (double) pos1.get("totalCost") + (double) pos2.get("totalCost");
+//		double totalProfitPercentage = totalProfit * 100 / totalCost;
+//		boolean manage1 = false;
+//		boolean manage2 = false;
+//
+//		if ((profitManagement(pos1) || (gammaManagement(pos1) && profit1 > 0))
+//				&& totalProfitPercentage >= 50) {
+//			// roll or close based on iv earnings
+//		}
+//		if ((profitManagement(pos2) || (gammaManagement(pos2) && profit2 > 0))
+//				&& totalProfitPercentage >= 50) {
+//			// roll or close based on iv earnings
+//		}
+//
+//		if ((profitManagement(pos1) || profitManagement(pos2)) && totalProfitPercentage >= 50) {
+//			// roll or close based on iv earnings
+//		}
+//		if (gammaManagement(pos1) && profit1 > 0) {
+//			// roll or close based on iv earnings
+//		}
+//		if (gammaManagement(pos2) && profit2 > 0) {
+//			// roll or close based on iv earnings
+//		}
+//
+//		// TODO : cases to cover,
+//		//  0) no roll despite 66% profit if noManagementPeriod has started, increase this period maybe? think. consider IV/rank into account?
+//		//  0.4) manage the complete strangle if one leg is 66% profitable other leg is in loss, but overall it is 50% profit (ANY DTE)
+//		//  0.5) manage the complete strangle if one leg is 66% profitable other leg is in loss, but overall it is profit and DTE <= criticalDTE
+//		//  1) cant close one leg if the other leg is in loss and this leg cannot be rolled (e.g. due to earnings)
+//		//  2) when stable, turn the loop on
+//		//  3) when more stable, turn the sms on
+//		// moneynessManagement(positions);
+//	}
 
 	private void manageLongArbitrage(String symbol, List<JSONObject> positions) {
 		double shortCallPrice = 0;
@@ -722,7 +859,7 @@ public class ETClientApp extends AppCommandLine {
 			if (positionType == PositionType.LONG) {
 				String putSymbol = getSymbolFromQuoteDetails((String) position.get("quoteDetails"));
 				longPutPrice = getCurrentMidPrice(ctx, putSymbol);
-				strikePrice = (Double) ((JSONObject)position.get("Product")).get("strikePrice");
+				strikePrice = (Long) ((JSONObject)position.get("Product")).get("strikePrice");
 			} else if (positionType == PositionType.SHORT) {
 				String callSymbol = getSymbolFromQuoteDetails((String) position.get("quoteDetails"));
 				shortCallPrice = getCurrentMidPrice(ctx, callSymbol);
@@ -736,22 +873,52 @@ public class ETClientApp extends AppCommandLine {
 		}
 	}
 
-	private void percentageGainManagement(JSONObject position) {
-		if (Double.class.isAssignableFrom(position.get("totalGainPct").getClass())) {
-			double totalPercentageGain = (double) position.get("totalGainPct");
-			if (totalPercentageGain > AppConfig.targetGainPercentage) {
-				out.println("Target achieved for : " + position.get("symbolDescription"));
-			}
-		}
-	}
+  private void percentageGainManagement(JSONObject position) {
+    if (Double.class.isAssignableFrom(position.get("totalGainPct").getClass())) {
+      double totalPercentageGain = (double) position.get("totalGainPct");
+      if (totalPercentageGain > AppConfig.targetGainPercentage) {
+        out.println("Target achieved for : " + position.get("symbolDescription"));
+      }
+    }
+  }
 
-	private void gammaManagement(JSONObject position) {
+//	private boolean profitManagement(JSONObject position) {
+//		if (Double.class.isAssignableFrom(position.get("totalGainPct").getClass())) {
+//			double totalPercentageGain = (double) position.get("totalGainPct");
+//			return totalPercentageGain >= AppConfig.targetGainPercentage;
+//		}
+//		return false;
+//	}
+	// Thread.currentThread().getStackTrace()[2].getLineNumber();
+
+//	private  double profitPercentage(JSONObject position) {
+//		if (Double.class.isAssignableFrom(position.get("totalGainPct").getClass())) {
+//			return (double) position.get("totalGainPct");
+//		} else {
+//			return 0.0;
+//		}
+//	}
+
+//	private  double profit(JSONObject position) {
+//		if (Double.class.isAssignableFrom(position.get("totalGain").getClass())) {
+//			return (double) position.get("totalGain");
+//		} else {
+//			return 0.0;
+//		}
+//	}
+
+	private void timeManagement(JSONObject position) {
     Calendar expiryDate = getExpiryFromJson(position, "quoteDetails");
     int daysToExpiry = getDaysToExpiry(expiryDate);
     if (daysToExpiry <= AppConfig.criticalDTE) {
 			out.println("Position " + position.get("symbolDescription") + " too close to expiry.");
 		}
   }
+
+  private void moneynessManagement(List<JSONObject> position) {
+		// TODO manage one itm leg
+
+	}
 
 	private void getOrders(final String acctIndex) {
 		OrderClient client = ctx.getBean(OrderClient.class);
