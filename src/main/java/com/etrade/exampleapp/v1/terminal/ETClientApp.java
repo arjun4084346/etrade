@@ -45,6 +45,7 @@ public class ETClientApp extends AppCommandLine {
 	public static final String ANSI_GREEN = "\u001B[32m";
 	public static final String ANSI_RED = "\u001B[31m";
 	public static final String ANSI_RESET = "\u001B[0m";
+	private static final String SEPARATOR = "-----------------------------------------\n";
 
 	public ETClientApp(String[] args) {
 		super(args);
@@ -151,6 +152,7 @@ public class ETClientApp extends AppCommandLine {
 				} else if (arg.equals("manage")) {
 					choice = 6;
 				}
+				out.println(SEPARATOR);
 			} else {
 				printMainMenu();
 				choice = KeyIn.getKeyInInteger();
@@ -710,6 +712,10 @@ public class ETClientApp extends AppCommandLine {
 
       double extrinsicCall = getExtrinsicOfCall(currentPrice, call);
 			double extrinsicPut = getExtrinsicOfPut(currentPrice, put);
+			// liquidity check
+			if (extrinsicCall < 0 || extrinsicPut < 0) {
+				continue;
+			}
 			double arbitrage = extrinsicCall - extrinsicPut;
 			arbitrage = Math.round(arbitrage * 100) / 100.0;
 			double dividendAdjustageArbitrage = arbitrage;
@@ -812,6 +818,8 @@ public class ETClientApp extends AppCommandLine {
 		// the later part involves data about IV earnings, to decide roll/close/strike/expiry - out of scope
     for (JSONObject position : positions) {
       percentageGainManagement(position);
+      // todo if 14 days are left, time to manage.
+      //  if cant be rolled => if can be rolled roll, otherwise close if both legs are in profit
       timeManagement(position);
       // TODO manage one itm leg
     }

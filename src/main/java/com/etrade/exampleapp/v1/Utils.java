@@ -75,7 +75,13 @@ public class Utils {
   // This only works with JSONObject of quote response
   public static double getExtrinsicOfCall(double currentPrice, @NonNull JSONObject call) {
     double strikePrice = (Double) call.get("strikePrice");
-    double callPrice = ((Double) call.get("bid") + (Double) call.get("ask")) / 2;
+    double bid = (Double) call.get("bid");
+    double ask = (Double) call.get("ask");
+
+    if (ask - bid > bid/10) {
+      return -1.0;
+    }
+    double callPrice = (bid + ask) / 2;
     double intrinsic = (Double) call.get("strikePrice") > currentPrice ? 0.0 : currentPrice - strikePrice;
 
     return Math.max(0.0, callPrice - intrinsic) * 100;
@@ -85,7 +91,13 @@ public class Utils {
   // currentPrice is the price of underlying stock
   public static double getExtrinsicOfPut(double stockPrice, @NonNull JSONObject put) {
     double strikePrice = (Double) put.get("strikePrice");
-    double putPrice = ((Double) put.get("bid") + (Double) put.get("ask")) / 2;
+    double bid = (Double) put.get("bid");
+    double ask = (Double) put.get("ask");
+
+    if (ask - bid > bid/10) {
+      return -1.0;
+    }
+    double putPrice = (bid + ask) / 2;
     double intrinsic = (Double) put.get("strikePrice") < stockPrice ? 0.0 : strikePrice - stockPrice;
 
     return Math.max(0.0, putPrice - intrinsic) * 100;
