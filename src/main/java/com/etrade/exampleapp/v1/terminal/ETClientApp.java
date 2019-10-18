@@ -39,9 +39,11 @@ public class ETClientApp extends AppCommandLine {
 	private AnnotationConfigApplicationContext ctx = null;
 	private Map<String, String> acctListMap = new HashMap<>();
 	private boolean isLive = false;
+	private boolean auto = false;
 	public final static String lineSeparator = System.lineSeparator();
 	public final static PrintStream out = System.out;
 	public static final String ANSI_GREEN = "\u001B[32m";
+	public static final String ANSI_RED = "\u001B[31m";
 	public static final String ANSI_RESET = "\u001B[0m";
 
 	public ETClientApp(String[] args) {
@@ -114,6 +116,7 @@ public class ETClientApp extends AppCommandLine {
 			if (args.length > 0) {
 				choice = 2;
 				arg = args[0];
+				auto = true;
 			} else {
 				printKeyMenu();
 				choice = KeyIn.getKeyInInteger();
@@ -177,9 +180,23 @@ public class ETClientApp extends AppCommandLine {
 					break;
 				case 5:
 					findArbitrageOpportunities();
+					if (auto) {
+						try {
+							Thread.sleep(60 * 1000L);
+						} catch (InterruptedException e) {
+							out.println(ANSI_RED + "[ERROR] : " + ANSI_RESET + Thread.currentThread().getStackTrace()[2].getLineNumber());
+						}
+					}
 					break;
 				case 6:
 					managePortfolio();
+					if (auto) {
+						try {
+							Thread.sleep(60 * 1000L);
+						} catch (InterruptedException e) {
+							out.println(ANSI_RED + "[ERROR] : " + ANSI_RESET + Thread.currentThread().getStackTrace()[2].getLineNumber());
+						}
+					}
 					break;
 				default:
 					out.println("Invalid Option :");
@@ -354,40 +371,40 @@ public class ETClientApp extends AppCommandLine {
 			JSONObject realTimeVal = (JSONObject) computedRec.get("RealTimeValues");
 
 			if (computedRec.get("accountBalance") != null) {
-				if( Double.class.isAssignableFrom(computedRec.get("accountBalance").getClass())) {
+				if (Double.class.isAssignableFrom(computedRec.get("accountBalance").getClass())) {
 					Double accountBalance = (Double)computedRec.get("accountBalance");
 					out.println("\t\tCash purchasing power:   $" + accountBalance);
-				}else if( Long.class.isAssignableFrom(computedRec.get("accountBalance").getClass())){
+				} else if( Long.class.isAssignableFrom(computedRec.get("accountBalance").getClass())){
 					Long accountBalance = (Long)computedRec.get("accountBalance");
 					out.println("\t\tCash purchasing power:   $" + accountBalance);
 				}
 			}
 
 			if (realTimeVal.get("totalAccountValue") != null) {
-				if( Double.class.isAssignableFrom(realTimeVal.get("totalAccountValue").getClass())) {
+				if (Double.class.isAssignableFrom(realTimeVal.get("totalAccountValue").getClass())) {
 					Double totalAccountValue = (Double)realTimeVal.get("totalAccountValue");
 					out.println("\t\tLive Account Value:      $" + totalAccountValue);
-				}else if( Long.class.isAssignableFrom(realTimeVal.get("totalAccountValue").getClass())){
+				} else if( Long.class.isAssignableFrom(realTimeVal.get("totalAccountValue").getClass())){
 					Long totalAccountValue = (Long)realTimeVal.get("totalAccountValue");
 					out.println("\t\tLive Account Value:      $" + totalAccountValue);
 				}
 			}
 
 			if (computedRec.get("marginBuyingPower") != null) {
-				if( Double.class.isAssignableFrom(computedRec.get("marginBuyingPower").getClass())) {
+				if (Double.class.isAssignableFrom(computedRec.get("marginBuyingPower").getClass())) {
 					Double marginBuyingPower = (Double)computedRec.get("marginBuyingPower");
 					out.println("\t\tMargin Buying Power:     $" + marginBuyingPower);
-				}else if( Long.class.isAssignableFrom(computedRec.get("marginBuyingPower").getClass())){
+				} else if( Long.class.isAssignableFrom(computedRec.get("marginBuyingPower").getClass())){
 					Long totalAccountValue = (Long)computedRec.get("marginBuyingPower");
 					out.println("\t\tMargin Buying Power:     $" + totalAccountValue);
 				}
 			}
 
 			if (computedRec.get("cashBuyingPower") != null) {
-				if( Double.class.isAssignableFrom(computedRec.get("cashBuyingPower").getClass())) {
+				if (Double.class.isAssignableFrom(computedRec.get("cashBuyingPower").getClass())) {
 					Double cashBuyingPower = (Double)computedRec.get("cashBuyingPower");
 					out.println("\t\tCash Buying Power:       $" + cashBuyingPower);
-				}else if( Long.class.isAssignableFrom(computedRec.get("cashBuyingPower").getClass())){
+				} else if( Long.class.isAssignableFrom(computedRec.get("cashBuyingPower").getClass())){
 					Long cashBuyingPower = (Long)computedRec.get("cashBuyingPower");
 					out.println("\t\tCash Buying Power:       $" + cashBuyingPower);
 				}
@@ -654,11 +671,13 @@ public class ETClientApp extends AppCommandLine {
 
 		//queryParams.add(Pair.of("expiryDay", "25"));
 		queryParams.add(Pair.of("expiryYear", "2019"));
-		queryParams.add(Pair.of("expiryMonth", "10"));
+		queryParams.add(Pair.of("expiryMonth", "11"));
 		queryParams.add(Pair.of("noOfStrikes", "10"));
 
+    String[] symbols = AppConfig.watchlist;
+    //symbols = new String[]{"BA"};
 
-		for (String symbol : AppConfig.watchlist) {
+		for (String symbol : symbols) {
 			queryParams.add(Pair.of("symbol", symbol));
 			double currentPrice = getCurrentMidPrice(ctx, symbol);
 			String noOfStrikes = String.valueOf(Math.round(currentPrice/10));
@@ -702,14 +721,10 @@ public class ETClientApp extends AppCommandLine {
 
 				try {
 					String response = client.getQuotes(symbol);
-					log.debug(" Response String : " + response);
 					JSONParser jsonParser = new JSONParser();
 					JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
-					log.debug(" JSONObject : " + jsonObject);
-
 					JSONObject quoteResponse = (JSONObject) jsonObject.get("QuoteResponse");
 					JSONArray quoteData = (JSONArray) quoteResponse.get("QuoteData");
-
 
 					if (quoteData != null) {
 						for (Object quoteDatum : quoteData) {
@@ -723,7 +738,7 @@ public class ETClientApp extends AppCommandLine {
 								//out.println("adding dividend");
 								dividendAdjustageArbitrage += dividend*100;
 								dividendRisk = true;
-								out.println("ex dividend date : " + new Date(exDividendDate * 1000).toString());
+								//out.println("ex dividend date : " + new Date(exDividendDate * 1000).toString());
 							} else {
 								// this might be ok in some cases after adding new if condition
 								//out.println("not adding dividend");
@@ -758,7 +773,8 @@ public class ETClientApp extends AppCommandLine {
 			// interest = prt/100 => r = interest * 100 / pt
 			double annualArbitragePercentage = annualArbitrage * 100 / margin;
 			annualArbitragePercentage = Math.round(annualArbitragePercentage*100)/100.0;
-			if (Math.abs(annualArbitragePercentage) >= AppConfig.arbitrageStrength) {
+			// TODO : for now, not printing short arbitrage because dividend info is not out in etrade api responses
+			if (!shortArbitrage && Math.abs(annualArbitragePercentage) >= AppConfig.arbitrageStrength) {
 				out.println(call.get("optionRootSymbol") + " :: " +
 						expiryDate.get(Calendar.YEAR) + "/" + (expiryDate.get(Calendar.MONTH) + 1) + "/" + expiryDate.get(Calendar.DAY_OF_MONTH) + " :: " +
 						call.get("strikePrice") + " :: " + annualArbitragePercentage + "%" + " (" + dividendAdjustageArbitrage + ") " +
@@ -792,6 +808,8 @@ public class ETClientApp extends AppCommandLine {
 	}
 
   private void manageShortStrangle(List<JSONObject> positions) {
+		// keep in mind that eligibility for managing is a different thing and being able to roll is different
+		// the later part involves data about IV earnings, to decide roll/close/strike/expiry - out of scope
     for (JSONObject position : positions) {
       percentageGainManagement(position);
       timeManagement(position);
@@ -849,6 +867,7 @@ public class ETClientApp extends AppCommandLine {
 		double shortCallPrice = 0;
 		double longPutPrice = 0;
 		double strikePrice = 0;
+		double underlyingPrice = getCurrentMidPrice(ctx, symbol);
 
 		for (JSONObject position : positions) {
 			PositionType positionType = PositionType.valueOf((String) position.get("positionType"));
@@ -868,7 +887,8 @@ public class ETClientApp extends AppCommandLine {
 
 		// TODO : do we want to close out this position in favour of other better opportunity?
 		// take into account the free capital
-		if (getExtrinsicValue(strikePrice, longPutPrice, OptionsType.PUT) >= getExtrinsicValue(strikePrice, shortCallPrice, OptionsType.CALL)) {
+		if (getExtrinsicValue(strikePrice, underlyingPrice, longPutPrice, OptionsType.PUT)
+				>= getExtrinsicValue(strikePrice, underlyingPrice, shortCallPrice, OptionsType.CALL)) {
 			out.println("adjust arbitrage on " + symbol);
 		}
 	}
@@ -879,7 +899,9 @@ public class ETClientApp extends AppCommandLine {
       if (totalPercentageGain > AppConfig.targetGainPercentage) {
         out.println("Target achieved for : " + position.get("symbolDescription"));
       }
-    }
+    } else {
+			out.println(ANSI_RED + "[ERROR] : " + ANSI_RESET + Thread.currentThread().getStackTrace()[2].getLineNumber());
+		}
   }
 
 //	private boolean profitManagement(JSONObject position) {
@@ -889,7 +911,7 @@ public class ETClientApp extends AppCommandLine {
 //		}
 //		return false;
 //	}
-	// Thread.currentThread().getStackTrace()[2].getLineNumber();
+	//
 
 //	private  double profitPercentage(JSONObject position) {
 //		if (Double.class.isAssignableFrom(position.get("totalGainPct").getClass())) {
@@ -899,18 +921,19 @@ public class ETClientApp extends AppCommandLine {
 //		}
 //	}
 
-//	private  double profit(JSONObject position) {
-//		if (Double.class.isAssignableFrom(position.get("totalGain").getClass())) {
-//			return (double) position.get("totalGain");
-//		} else {
-//			return 0.0;
-//		}
-//	}
+	private  double profit(JSONObject position) {
+		if (Double.class.isAssignableFrom(position.get("totalGain").getClass())) {
+			return (double) position.get("totalGain");
+		} else {
+			out.println(ANSI_RED + "[ERROR] : " + ANSI_RESET + Thread.currentThread().getStackTrace()[2].getLineNumber());
+			return 0.0;
+		}
+	}
 
 	private void timeManagement(JSONObject position) {
     Calendar expiryDate = getExpiryFromJson(position, "quoteDetails");
     int daysToExpiry = getDaysToExpiry(expiryDate);
-    if (daysToExpiry <= AppConfig.criticalDTE) {
+    if (daysToExpiry <= AppConfig.criticalDTE && profit(position) > 0) {
 			out.println("Position " + position.get("symbolDescription") + " too close to expiry.");
 		}
   }
