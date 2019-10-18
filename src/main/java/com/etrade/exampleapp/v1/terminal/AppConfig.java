@@ -11,6 +11,7 @@ public class AppConfig {
   public static final double targetGainPercentage;
   public static final int criticalDTE;
   public static final int noManagementPeriod;
+  public static final int sleepTime;
 
   static {
     ClassLoader classloader = Thread.currentThread().getContextClassLoader();
@@ -22,6 +23,7 @@ public class AppConfig {
       targetGainPercentage = Double.parseDouble(props.getProperty("targetGainPercentage", "66"));
       criticalDTE = Integer.parseInt(props.getProperty("criticalDTE", "14"));
       noManagementPeriod = Integer.parseInt(props.getProperty("noManagementPeriod", "16"));
+      sleepTime = Integer.parseInt(props.getProperty("autoMode.sleepTime", "60"));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

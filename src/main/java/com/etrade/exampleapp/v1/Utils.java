@@ -82,23 +82,25 @@ public class Utils {
   }
 
   // This only works with JSONObject of quote response
-  public static double getExtrinsicOfPut(double currentPrice, @NonNull JSONObject put) {
+  // currentPrice is the price of underlying stock
+  public static double getExtrinsicOfPut(double stockPrice, @NonNull JSONObject put) {
     double strikePrice = (Double) put.get("strikePrice");
     double putPrice = ((Double) put.get("bid") + (Double) put.get("ask")) / 2;
-    double intrinsic = (Double) put.get("strikePrice") < currentPrice ? 0.0 : strikePrice - currentPrice;
+    double intrinsic = (Double) put.get("strikePrice") < stockPrice ? 0.0 : strikePrice - stockPrice;
 
     return Math.max(0.0, putPrice - intrinsic) * 100;
   }
 
-  public static double getExtrinsicValue(double strikePrice, double currentPrice, OptionsType optionsType) {
+  // currentPrice is the price of option
+  public static double getExtrinsicValue(double strikePrice, double underlyingPrice, double optionsPrice, OptionsType optionsType) {
     double intrinsic = 0;
     if (optionsType == OptionsType.CALL) {
-      intrinsic = strikePrice < currentPrice ? currentPrice - strikePrice : 0;
+      intrinsic = underlyingPrice < optionsPrice ? underlyingPrice - strikePrice : 0;
     } else if (optionsType == OptionsType.PUT) {
-      intrinsic = strikePrice > currentPrice ? strikePrice - currentPrice : 0;
+      intrinsic = strikePrice > underlyingPrice ? strikePrice - underlyingPrice : 0;
     }
 
-    return Math.max(0.0, currentPrice - intrinsic) * 100;
+    return Math.max(0.0, optionsPrice - intrinsic) * 100;
   }
 
   public static Map<String, List<JSONObject>> getPositions(AnnotationConfigApplicationContext ctx) {
