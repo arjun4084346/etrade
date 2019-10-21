@@ -677,7 +677,7 @@ public class ETClientApp extends AppCommandLine {
 		queryParams.add(Pair.of("noOfStrikes", "10"));
 
     String[] symbols = AppConfig.watchlist;
-    //symbols = new String[]{"BA"};
+    //symbols = new String[]{"TXN"};
 
 		for (String symbol : symbols) {
 			queryParams.add(Pair.of("symbol", symbol));
@@ -692,8 +692,6 @@ public class ETClientApp extends AppCommandLine {
 
 	private void processOptionsChain(double currentPrice, JSONObject optionsChain) {
 		JSONArray optionPair = (JSONArray) optionsChain.get("OptionPair");
-//		DecimalFormat format = new DecimalFormat("#.00");
-
 		// option chain might be not available for that expiry for that symbol
 		if (optionPair == null) {
 			out.println("No option pair received.");
@@ -704,89 +702,68 @@ public class ETClientApp extends AppCommandLine {
 			JSONObject callPutPair = (JSONObject) o;
 			JSONObject call = (JSONObject) callPutPair.get("Call");
 			JSONObject put = (JSONObject) callPutPair.get("Put");
-			boolean shortArbitrage = false;
-			boolean dividendRisk = false;
+			processOnePair(currentPrice, call, put);
+		}
+	}
 
-			Calendar expiryDate = getExpiryFromJson(call, "quoteDetail");
-      int daysToExpiry = getDaysToExpiry(expiryDate);
+	private void processOnePair(double currentPrice, JSONObject call, JSONObject put) {
+		double strikePrice = (Double) call.get("strikePrice");
+		boolean shortArbitrage = false;
+		boolean dividendRisk = false;
+		double arbitrage;
+		double dividendAdjustageArbitrage;
 
-      double extrinsicCall = getExtrinsicOfCall(currentPrice, call);
-			double extrinsicPut = getExtrinsicOfPut(currentPrice, put);
-			// liquidity check
-			if (extrinsicCall < 0 || extrinsicPut < 0) {
-				continue;
+		Calendar expiryDate = getExpiryFromJson(call, "quoteDetail");
+		int daysToExpiry = getDaysToExpiry(expiryDate);
+
+		double extrinsicCall = getExtrinsicOfCall(currentPrice, call);
+		double extrinsicPut = getExtrinsicOfPut(currentPrice, put);
+		// liquidity check
+		if (extrinsicCall < 0 || extrinsicPut < 0) {
+			return;
+		}
+
+		arbitrage = extrinsicCall - extrinsicPut;
+		arbitrage = Math.round(arbitrage * 100) / 100.0;
+
+		if (arbitrage < 0) {
+			// shortArbitrage = !shortArbitrage;
+			//arbitrage = -arbitrage;
+			dividendAdjustageArbitrage = findShortArbitrage(ctx, call, expiryDate, arbitrage);
+			if (dividendAdjustageArbitrage > 0) {
+				// if it became +ve, it must be because of dividend
+				dividendRisk = true;
 			}
-			double arbitrage = extrinsicCall - extrinsicPut;
-			arbitrage = Math.round(arbitrage * 100) / 100.0;
-			double dividendAdjustageArbitrage = arbitrage;
-			if (arbitrage < 0) {
-				// shortArbitrage = !shortArbitrage;
-				//arbitrage = -arbitrage;
-				String symbol = getSymbolFromQuoteDetails((String) call.get("symbol"));
-				QuotesClient client = ctx.getBean(QuotesClient.class);
+		} else {
+			dividendAdjustageArbitrage = arbitrage;
+		}
 
-				try {
-					String response = client.getQuotes(symbol);
-					JSONParser jsonParser = new JSONParser();
-					JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
-					JSONObject quoteResponse = (JSONObject) jsonObject.get("QuoteResponse");
-					JSONArray quoteData = (JSONArray) quoteResponse.get("QuoteData");
+		if (dividendAdjustageArbitrage < 0) {
+			// TODO : verify if security is hard-to-borrow
+			// not available in quote response or optionchains response
+			// maybe create a list of hard-to-borrow securities and print that
+			shortArbitrage = true;
+		}
+		dividendAdjustageArbitrage = Math.abs(dividendAdjustageArbitrage);
+		// TODO : how much to subtract so it get filled?
+		//  again difficult, may depend upon moneyness!
+		//  is the option penny incremental?
+		dividendAdjustageArbitrage -= 3;
 
-					if (quoteData != null) {
-						for (Object quoteDatum : quoteData) {
-							JSONObject innerObj = (JSONObject) quoteDatum;
-							double dividend = (double) ((JSONObject) innerObj.get("All")).get("dividend");
-							long exDividendDate = (long) ((JSONObject) innerObj.get("All")).get("exDividendDate");
-							// dividend should not be applied if ex-dividend date is on the next day of the expiry date
-							// subtract 20000 seconds to avoid cases where both dates are almost same, time belongs to EOD
-							if (expiryDate.getTimeInMillis() >= (exDividendDate-20000)*1000 &&
-									System.currentTimeMillis() <= (exDividendDate-20000)*1000) {// >= 24 * 60 * 60 *1000L) {
-								//out.println("adding dividend");
-								dividendAdjustageArbitrage += dividend*100;
-								dividendRisk = true;
-								//out.println("ex dividend date : " + new Date(exDividendDate * 1000).toString());
-							} else {
-								// this might be ok in some cases after adding new if condition
-								//out.println("not adding dividend");
-							}
-							break;
-						}
-					}
+		// exclude '0 arbitrage minus commission' cases.
+		if (dividendAdjustageArbitrage <= 1) {
+			return;
+		}
 
-				} catch (ApiException | ParseException e) {
-					log.error(e);
-				}
-			}
+		double annualArbitragePercentage = calculateAnnualArbitrage(currentPrice, daysToExpiry, dividendAdjustageArbitrage);
 
-			if (dividendAdjustageArbitrage < 0) {
-				// TODO : verify if security is hard-to-borrow
-				shortArbitrage = true;
-			}
-			dividendAdjustageArbitrage = Math.abs(dividendAdjustageArbitrage);
-			// TODO : how much to subtract so it get filled?
-			//  again difficult, may depend upon moneyness!
-			//  is the option penny incremental?
-			// double commissionAdjustedArbitrage = arbitrage < 0 ? arbitrage + 3 : arbitrage - 3;
-			double commissionAdjustedArbitrage = dividendAdjustageArbitrage - 3;
+		String expiry = calendarToDate(expiryDate);
 
-			//arbitrage = Math.round(arbitrage*100)/100.0;
-			if (commissionAdjustedArbitrage <= 1) {
-				continue;
-			}
-
-			double annualArbitrage = (commissionAdjustedArbitrage/daysToExpiry) * 365;
-			double margin = currentPrice * getMarginPercentage();
-			// interest = prt/100 => r = interest * 100 / pt
-			double annualArbitragePercentage = annualArbitrage * 100 / margin;
-			annualArbitragePercentage = Math.round(annualArbitragePercentage*100)/100.0;
-			// TODO : for now, not printing short arbitrage because dividend info is not out in etrade api responses
-			if (!shortArbitrage && Math.abs(annualArbitragePercentage) >= AppConfig.arbitrageStrength) {
-				out.println(call.get("optionRootSymbol") + " :: " +
-						expiryDate.get(Calendar.YEAR) + "/" + (expiryDate.get(Calendar.MONTH) + 1) + "/" + expiryDate.get(Calendar.DAY_OF_MONTH) + " :: " +
-						call.get("strikePrice") + " :: " + annualArbitragePercentage + "%" + " (" + dividendAdjustageArbitrage + ") " +
-						(shortArbitrage ? ANSI_GREEN + "[SHORT ARBITRAGE]" + ANSI_RESET : "") +
-						(dividendRisk ? ANSI_GREEN + "[DIVIDEND RISK]" + ANSI_RESET : ""));
-			}
+		if (Math.abs(annualArbitragePercentage) >= AppConfig.arbitrageStrength) {
+			out.println(call.get("optionRootSymbol") + " :: " + expiry + " :: " + strikePrice + " :: " +
+					annualArbitragePercentage + "%" + " (" + dividendAdjustageArbitrage + ") " +
+					(shortArbitrage ? ANSI_GREEN + "[SHORT ARBITRAGE] " + ANSI_RESET : " ") +
+					(dividendRisk ? ANSI_GREEN + "[DIVIDEND RISK]" + ANSI_RESET : ""));
 		}
 	}
 
@@ -796,6 +773,8 @@ public class ETClientApp extends AppCommandLine {
 		for (Map.Entry<String, List<JSONObject>> entry : positionGroups.entrySet()) {
 			OptionsStrategy optionsStrategy = identityPositionType(entry.getValue());
 			switch (optionsStrategy) {
+				case SHORT_PUT:
+				case SHORT_CALL:
 				case SHORT_STRANGLE:
           manageShortStrangle(entry.getValue());
 					break;
@@ -807,6 +786,8 @@ public class ETClientApp extends AppCommandLine {
 					//  short call management
 					//  short put management
 
+				case UNSUPPORTED:
+					out.println(ANSI_RED + "[ERROR] : UNSUPPORTED STRATEGY for " + entry.getKey() + ANSI_RESET);
 				default:
 					break;
 			}
@@ -942,7 +923,16 @@ public class ETClientApp extends AppCommandLine {
     Calendar expiryDate = getExpiryFromJson(position, "quoteDetails");
     int daysToExpiry = getDaysToExpiry(expiryDate);
     if (daysToExpiry <= AppConfig.criticalDTE && profit(position) > 0) {
-			out.println("Position " + position.get("symbolDescription") + " too close to expiry.");
+			// time management does not depend upon IV
+    	//long earningsDate = (long) position.get("earnings");
+			//earningsDate -= 20000;
+			//earningsDate *= 1000;
+
+			//if (System.currentTimeMillis() < earningsDate // earnings coming
+			//		&& earningsDate - expiryDate.getTimeInMillis() < 7 * 24 * 60 * 60 *1000L	// earnings scheduled before next expiry
+			//		&& other leg is in loss	) {
+				out.println("Position " + position.get("symbolDescription") + " too close to expiry.");
+			//}
 		}
   }
 

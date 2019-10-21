@@ -7,14 +7,12 @@ import com.etrade.exampleapp.v1.clients.order.PriceType;
 import com.etrade.exampleapp.v1.exception.ApiException;
 import com.etrade.exampleapp.v1.terminal.ETClientApp;
 import java.io.PrintStream;
-import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +21,7 @@ import org.apache.log4j.Logger;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 
@@ -78,7 +77,7 @@ public class Utils {
     double bid = (Double) call.get("bid");
     double ask = (Double) call.get("ask");
 
-    if (ask - bid > bid/10) {
+    if (ask - bid > bid/5) {
       return -1.0;
     }
     double callPrice = (bid + ask) / 2;
@@ -113,6 +112,57 @@ public class Utils {
     }
 
     return Math.max(0.0, optionsPrice - intrinsic) * 100;
+  }
+
+  public static double findShortArbitrage(AnnotationConfigApplicationContext ctx, JSONObject call, Calendar expiryDate, double arbitrage) {
+    String symbol = getSymbolFromQuoteDetails((String) call.get("symbol"));
+    QuotesClient client = ctx.getBean(QuotesClient.class);
+
+    try {
+      String response = client.getQuotes(symbol);
+      JSONParser jsonParser = new JSONParser();
+      JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
+      JSONObject quoteResponse = (JSONObject) jsonObject.get("QuoteResponse");
+      JSONArray quoteData = (JSONArray) quoteResponse.get("QuoteData");
+
+      if (quoteData != null) {
+        // not sure why it returns an array of quoteDatum
+        JSONObject innerObj = (JSONObject) quoteData.get(0);
+        innerObj = (JSONObject) innerObj.get("All");
+        double dividend = (double) innerObj.get("dividend");
+        long exDividendDate = (long) innerObj.get("exDividendDate");
+        exDividendDate -= 20000L; // subtract a few hours to avoid cases where both dates are almost same
+        exDividendDate *= 1000L;	// ex dividend date is in seconds, not ms!
+        // dividend should not be applied if ex-dividend date is on the next day of the expiry date
+        if (System.currentTimeMillis() <= exDividendDate && exDividendDate <= expiryDate.getTimeInMillis()) {
+          //out.println("adding dividend");
+          arbitrage += dividend*100;
+          // exclude amt strikes, they are more likely to get assign
+          double callDelta = (Double) ((JSONObject) call.get("OptionGreeks")).get("delta");
+          if (callDelta >= .16) {
+            return 0;
+          }
+          //out.println("ex dividend date : " + new Date(exDividendDate * 1000).toString());
+        } else {
+          // this might be ok in some cases after adding new if condition
+          //out.println("not adding dividend");
+        }
+      } else {
+        out.println(ETClientApp.ANSI_RED + "[ERROR] : " + ETClientApp.ANSI_RESET + Thread.currentThread().getStackTrace()[2].getLineNumber());
+        return 0;
+      }
+    } catch (ApiException | ParseException e) {
+      log.error(e);
+    }
+    return arbitrage;
+  }
+
+  public static double calculateAnnualArbitrage(double currentPrice, int daysToExpiry, double dividendAdjustageArbitrage) {
+    double annualArbitrage = (dividendAdjustageArbitrage / daysToExpiry) * 365;
+    double margin = currentPrice * getMarginPercentage();
+    // interest = prt/100 => r = interest * 100 / pt
+    double annualArbitragePercentage = annualArbitrage * 100 / margin;
+    return Math.round(annualArbitragePercentage*100)/100.0;
   }
 
   public static Map<String, List<JSONObject>> getPositions(AnnotationConfigApplicationContext ctx) {
@@ -153,7 +203,11 @@ public class Utils {
   }
 
   // TODO : this need a lot of improvement
+  // next identify (short strangle + short option)
   // maybe need to return a mapping of strategy->positions
+  // one algo to find srategies is to start searching by num of positions.
+  // if num of positions is 4, it can only be iron condor or something managed in the same way
+  // if it is 6, it can only be butterfly
   public static OptionsStrategy identityPositionType(List<JSONObject> value) {
     int numOfShortCalls = 0;
     int numOfLongCalls = 0;
@@ -170,6 +224,7 @@ public class Utils {
       long quantity = Math.abs((long) position.get("quantity"));
 
       if (securityType == SecurityType.OPTN) {
+        numOfContracts++;
         OptionsType optionsType = OptionsType.valueOf((String) product.get("callPut"));
 
         if (optionsType == OptionsType.CALL && positionType == PositionType.LONG) {
@@ -194,9 +249,20 @@ public class Utils {
         && numOfShortCalls == numOfLongPuts
         && numOfShares == 100 * numOfLongPuts) {
       return OptionsStrategy.LONG_ARBITRAGE;
+    } else if (numOfLongCalls == 0
+        && numOfLongPuts == 0
+        && numOfShortCalls > 0
+        && numOfShortPuts == 0) {
+      return OptionsStrategy.SHORT_CALL;
+    } else if (numOfLongCalls == 0
+        && numOfLongPuts == 0
+        && numOfShortPuts > 0
+        && numOfShortCalls == 0) {
+      return OptionsStrategy.SHORT_CALL;
+    } else if ((numOfShortCalls == numOfLongCalls) || (numOfLongPuts == numOfShortPuts)) {
+      return OptionsStrategy.SPREAD;
     }
-
-    return OptionsStrategy.CREDIT_SPREAD;
+    return OptionsStrategy.UNSUPPORTED;
   }
 
   public static String getSymbolFromQuoteDetails(String quoteDetail) {
@@ -214,6 +280,10 @@ public class Utils {
 
   public static int getDaysToExpiry(Calendar expiryDate) {
     return (int) ((expiryDate.getTimeInMillis() - System.currentTimeMillis()) / MILLIS_IN_A_DAY);
+  }
+
+  public static String calendarToDate(Calendar date) {
+    return date.toInstant().toString().substring(0, 10);
   }
 
   // TODO : difficult to calculate,
@@ -265,7 +335,11 @@ public class Utils {
     SHORT_ARBITRAGE,  // TODO : so difficult to find and manage,
     // take dividend into account, notice if drop happens only on one day or gradually?
     // also if the security is hard to borrow? whats the interest rate, if any?
+    SPREAD,
+    // we are not yet ready to distinguish debit and credit spreads
     CREDIT_SPREAD,
+    SHORT_PUT,
+    SHORT_CALL,
     SHORT_BROKEN_WING_BUTTERFLY,
     UNSUPPORTED
   }
