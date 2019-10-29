@@ -93,7 +93,7 @@ public class Utils {
     double bid = (Double) put.get("bid");
     double ask = (Double) put.get("ask");
 
-    if (ask - bid > bid/10) {
+    if (ask > 1.04 * bid) {
       return -1.0;
     }
     double putPrice = (bid + ask) / 2;
@@ -134,6 +134,8 @@ public class Utils {
         exDividendDate -= 20000L; // subtract a few hours to avoid cases where both dates are almost same
         exDividendDate *= 1000L;	// ex dividend date is in seconds, not ms!
         // dividend should not be applied if ex-dividend date is on the next day of the expiry date
+
+        // todo : either check if ex dividend date is b/w now and expiry, or check ex dividend date + 3 months are b/w now and expiry
         if (System.currentTimeMillis() <= exDividendDate && exDividendDate <= expiryDate.getTimeInMillis()) {
           //out.println("adding dividend");
           arbitrage += dividend*100;
@@ -292,7 +294,7 @@ public class Utils {
   //  margin = orderpreviewclient.get("currentOrderImpact")
   public static int getMarginPercentage() {
     // assuming 50% margin requirement
-    return 50;
+    return 10;
   }
 
   public static String getPrice(PriceType priceType, JSONObject orderDetail) {

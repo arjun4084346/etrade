@@ -677,7 +677,7 @@ public class ETClientApp extends AppCommandLine {
 		queryParams.add(Pair.of("noOfStrikes", "10"));
 
     String[] symbols = AppConfig.watchlist;
-    //symbols = new String[]{"TXN"};
+    //symbols = new String[]{"NKE"};
 
 		for (String symbol : symbols) {
 			queryParams.add(Pair.of("symbol", symbol));
@@ -709,7 +709,7 @@ public class ETClientApp extends AppCommandLine {
 	private void processOnePair(double currentPrice, JSONObject call, JSONObject put) {
 		double strikePrice = (Double) call.get("strikePrice");
 		boolean shortArbitrage = false;
-		boolean dividendRisk = false;
+		boolean upcomingDividend = false;
 		double arbitrage;
 		double dividendAdjustageArbitrage;
 
@@ -726,13 +726,14 @@ public class ETClientApp extends AppCommandLine {
 		arbitrage = extrinsicCall - extrinsicPut;
 		arbitrage = Math.round(arbitrage * 100) / 100.0;
 
+		// todo : either check if ex dividend date is b/w now and expiry, or check ex dividend date + 3 months are b/w now and expiry
 		if (arbitrage < 0) {
 			// shortArbitrage = !shortArbitrage;
 			//arbitrage = -arbitrage;
 			dividendAdjustageArbitrage = findShortArbitrage(ctx, call, expiryDate, arbitrage);
 			if (dividendAdjustageArbitrage > 0) {
 				// if it became +ve, it must be because of dividend
-				dividendRisk = true;
+				upcomingDividend = true;
 			}
 		} else {
 			dividendAdjustageArbitrage = arbitrage;
@@ -757,13 +758,15 @@ public class ETClientApp extends AppCommandLine {
 
 		double annualArbitragePercentage = calculateAnnualArbitrage(currentPrice, daysToExpiry, dividendAdjustageArbitrage);
 
+		// this method return time in GMT
 		String expiry = calendarToDate(expiryDate);
 
+		// SHORT ARBITRAGE means dividend information might be missing!
 		if (Math.abs(annualArbitragePercentage) >= AppConfig.arbitrageStrength) {
 			out.println(call.get("optionRootSymbol") + " :: " + expiry + " :: " + strikePrice + " :: " +
 					annualArbitragePercentage + "%" + " (" + dividendAdjustageArbitrage + ") " +
 					(shortArbitrage ? ANSI_GREEN + "[SHORT ARBITRAGE] " + ANSI_RESET : " ") +
-					(dividendRisk ? ANSI_GREEN + "[DIVIDEND RISK]" + ANSI_RESET : ""));
+					(upcomingDividend ? ANSI_GREEN + "[UPCOMING DIVIDEND]" + ANSI_RESET : ""));
 		}
 	}
 
@@ -783,8 +786,6 @@ public class ETClientApp extends AppCommandLine {
 					break;
 				case SHORT_STRADDLE:
 				// TODO : add more management strategies
-					//  short call management
-					//  short put management
 
 				case UNSUPPORTED:
 					out.println(ANSI_RED + "[ERROR] : UNSUPPORTED STRATEGY for " + entry.getKey() + ANSI_RESET);
@@ -804,6 +805,7 @@ public class ETClientApp extends AppCommandLine {
       timeManagement(position);
       // TODO manage one itm leg
     }
+		//moneynessManagement(positions);
   }
 
 //	private void manageShortStrangle(Pair<JSONObject, JSONObject> positions) {
@@ -931,14 +933,60 @@ public class ETClientApp extends AppCommandLine {
 			//if (System.currentTimeMillis() < earningsDate // earnings coming
 			//		&& earningsDate - expiryDate.getTimeInMillis() < 7 * 24 * 60 * 60 *1000L	// earnings scheduled before next expiry
 			//		&& other leg is in loss	) {
+			// todo : if (earnings are near or iv is low) and total position is in net loss, do not print
 				out.println("Position " + position.get("symbolDescription") + " too close to expiry.");
 			//}
 		}
   }
 
-  private void moneynessManagement(List<JSONObject> position) {
+  private void moneynessManagement(List<JSONObject> positions) {
 		// TODO manage one itm leg
+		JSONObject pos1 = positions.get(0);
+		JSONObject pos2 = positions.get(1);
+		String symbol1 = getSymbolFromQuoteDetails((String) pos1.get("quoteDetails"));
+		String symbol2 = getSymbolFromQuoteDetails((String) pos2.get("quoteDetails"));
+		JSONObject innerObj1;
+		JSONObject innerObj2;
+		QuotesClient client = ctx.getBean(QuotesClient.class);
 
+		try {
+			String response1 = client.getQuotes(symbol1);
+			JSONParser jsonParser1 = new JSONParser();
+			JSONObject jsonObject1 = (JSONObject) jsonParser1.parse(response1);
+			JSONObject quoteResponse1 = (JSONObject) jsonObject1.get("QuoteResponse");
+			JSONArray quoteData1 = (JSONArray) quoteResponse1.get("QuoteData");
+			String response2 = client.getQuotes(symbol2);
+			JSONParser jsonParser2 = new JSONParser();
+			JSONObject jsonObject2 = (JSONObject) jsonParser2.parse(response2);
+			JSONObject quoteResponse2 = (JSONObject) jsonObject2.get("QuoteResponse");
+			JSONArray quoteData2 = (JSONArray) quoteResponse2.get("QuoteData");
+
+			if (quoteData1 != null) {
+				// not sure why it returns an array of quoteDatum
+				innerObj1 = (JSONObject) ((JSONObject) quoteData1.get(0)).get("All");
+			} else {
+				out.println(ETClientApp.ANSI_RED + "[ERROR] : " + ETClientApp.ANSI_RESET + Thread.currentThread().getStackTrace()[2].getLineNumber());
+			}
+			if (quoteData2 != null) {
+				// not sure why it returns an array of quoteDatum
+				innerObj2 = (JSONObject) ((JSONObject) quoteData2.get(0)).get("All");
+			} else {
+				out.println(ETClientApp.ANSI_RED + "[ERROR] : " + ETClientApp.ANSI_RESET + Thread.currentThread().getStackTrace()[2].getLineNumber());
+			}
+		} catch (ApiException | ParseException e) {
+			log.error(e);
+		}
+
+
+
+
+		String symbol = (String) ((JSONObject) pos1.get("Product")).get("symbol");
+//		if ((pos1.get("itm").toString().equalsIgnoreCase("itm")
+//				&& (double) pos2.get("delta") <= .20) ||
+//				(pos2.get("itm").toString().equalsIgnoreCase("itm")
+//						&& (double) pos1.get("delta") <= .20)) {
+//			out.println("One lef of strangle on " + symbol + " is ITM. Roll the other leg.");
+//		}
 	}
 
 	private void getOrders(final String acctIndex) {
