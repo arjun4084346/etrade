@@ -7,7 +7,9 @@ import java.util.Properties;
 
 public class AppConfig {
   public static final String[] watchlist;
+  public static final String[] noDividendWatchlist;
   public static final double arbitrageStrength;
+  public static final double arbitrageStrengthDollars;
   public static final double targetGainPercentage;
   public static final int criticalDTE;
   public static final int noManagementPeriod;
@@ -19,7 +21,9 @@ public class AppConfig {
       Properties props = new Properties();
       props.load(in);
       watchlist = props.getProperty("watchlist").split(",");
+      noDividendWatchlist = props.getProperty("noDividendWatchlist").split(",");
       arbitrageStrength = Double.parseDouble(props.getProperty("arbitrageStrength", "12"));
+      arbitrageStrengthDollars = Double.parseDouble(props.getProperty("arbitrageStrengthDollars", "20"));
       targetGainPercentage = Double.parseDouble(props.getProperty("targetGainPercentage", "66"));
       criticalDTE = Integer.parseInt(props.getProperty("criticalDTE", "14"));
       noManagementPeriod = Integer.parseInt(props.getProperty("noManagementPeriod", "16"));

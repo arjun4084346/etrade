@@ -664,33 +664,33 @@ public class ETClientApp extends AppCommandLine {
 		String optionCategory = "ALL";
 		String includeWeekly = "true";
 		List<Pair> queryParams = new ArrayList<>();
-		// definitily required
+		// definitely required
 		queryParams.add(Pair.of("includeWeekly", "true"));
 		queryParams.add(Pair.of("optionCategory", "ALL"));
 
 		// include?
 		queryParams.add(Pair.of("priceType", "ALL"));
 
-		//queryParams.add(Pair.of("expiryDay", "25"));
+		queryParams.add(Pair.of("expiryDay", "13"));
 		queryParams.add(Pair.of("expiryYear", "2019"));
-		queryParams.add(Pair.of("expiryMonth", "11"));
-		queryParams.add(Pair.of("noOfStrikes", "10"));
+		queryParams.add(Pair.of("expiryMonth", "12"));
+		queryParams.add(Pair.of("noOfStrikes", "4"));
 
     String[] symbols = AppConfig.watchlist;
-    //symbols = new String[]{"NKE"};
+    //symbols = new String[]{"SMH"};
 
 		for (String symbol : symbols) {
 			queryParams.add(Pair.of("symbol", symbol));
-			double currentPrice = getCurrentMidPrice(ctx, symbol);
-			String noOfStrikes = String.valueOf(Math.round(currentPrice/10));
+			double underlyingPrice = getCurrentMidPrice(ctx, symbol);
+			String noOfStrikes = String.valueOf(Math.round(underlyingPrice / 10));
 			//queryParams.add(Pair.of("noOfStrikes", noOfStrikes));
 			JSONObject optionsChain = getOptionsChain(symbol, queryParams);
-			processOptionsChain(currentPrice, optionsChain);
+			processOptionsChain(underlyingPrice, optionsChain);
 			queryParams.remove(Pair.of("symbol", symbol));
 		}
 	}
 
-	private void processOptionsChain(double currentPrice, JSONObject optionsChain) {
+	private void processOptionsChain(double underlyingPrice, JSONObject optionsChain) {
 		JSONArray optionPair = (JSONArray) optionsChain.get("OptionPair");
 		// option chain might be not available for that expiry for that symbol
 		if (optionPair == null) {
@@ -702,22 +702,22 @@ public class ETClientApp extends AppCommandLine {
 			JSONObject callPutPair = (JSONObject) o;
 			JSONObject call = (JSONObject) callPutPair.get("Call");
 			JSONObject put = (JSONObject) callPutPair.get("Put");
-			processOnePair(currentPrice, call, put);
+			processOnePair(underlyingPrice, call, put);
 		}
 	}
 
-	private void processOnePair(double currentPrice, JSONObject call, JSONObject put) {
+	private void processOnePair(double underlyingPrice, JSONObject call, JSONObject put) {
 		double strikePrice = (Double) call.get("strikePrice");
 		boolean shortArbitrage = false;
 		boolean upcomingDividend = false;
 		double arbitrage;
-		double dividendAdjustageArbitrage;
+		double dividendAdjustedArbitrage;
 
 		Calendar expiryDate = getExpiryFromJson(call, "quoteDetail");
 		int daysToExpiry = getDaysToExpiry(expiryDate);
 
-		double extrinsicCall = getExtrinsicOfCall(currentPrice, call);
-		double extrinsicPut = getExtrinsicOfPut(currentPrice, put);
+		double extrinsicCall = getExtrinsicValue(underlyingPrice, call, OptionsType.CALL);
+		double extrinsicPut = getExtrinsicValue(underlyingPrice, put, OptionsType.PUT);
 		// liquidity check
 		if (extrinsicCall < 0 || extrinsicPut < 0) {
 			return;
@@ -729,34 +729,34 @@ public class ETClientApp extends AppCommandLine {
 		// todo : either check if ex dividend date is b/w now and expiry, or check ex dividend date + 3 months are b/w now and expiry
 		if (arbitrage < 0) {
 			// shortArbitrage = !shortArbitrage;
-			//arbitrage = -arbitrage;
-			dividendAdjustageArbitrage = findShortArbitrage(ctx, call, expiryDate, arbitrage);
-			if (dividendAdjustageArbitrage > 0) {
+			// arbitrage = -arbitrage;
+			dividendAdjustedArbitrage = findShortArbitrage(ctx, call, expiryDate, arbitrage);
+			if (dividendAdjustedArbitrage > 0) {
 				// if it became +ve, it must be because of dividend
 				upcomingDividend = true;
 			}
 		} else {
-			dividendAdjustageArbitrage = arbitrage;
+			dividendAdjustedArbitrage = arbitrage;
 		}
 
-		if (dividendAdjustageArbitrage < 0) {
+		if (dividendAdjustedArbitrage < 0) {
 			// TODO : verify if security is hard-to-borrow
 			// not available in quote response or optionchains response
 			// maybe create a list of hard-to-borrow securities and print that
 			shortArbitrage = true;
 		}
-		dividendAdjustageArbitrage = Math.abs(dividendAdjustageArbitrage);
+		dividendAdjustedArbitrage = Math.abs(dividendAdjustedArbitrage);
 		// TODO : how much to subtract so it get filled?
 		//  again difficult, may depend upon moneyness!
 		//  is the option penny incremental?
-		dividendAdjustageArbitrage -= 3;
+		dividendAdjustedArbitrage -= 3;
 
 		// exclude '0 arbitrage minus commission' cases.
-		if (dividendAdjustageArbitrage <= 1) {
+		if (dividendAdjustedArbitrage <= AppConfig.arbitrageStrengthDollars) {
 			return;
 		}
 
-		double annualArbitragePercentage = calculateAnnualArbitrage(currentPrice, daysToExpiry, dividendAdjustageArbitrage);
+		double annualArbitragePercentage = calculateAnnualArbitrage(underlyingPrice, daysToExpiry, dividendAdjustedArbitrage);
 
 		// this method return time in GMT
 		String expiry = calendarToDate(expiryDate);
@@ -764,7 +764,7 @@ public class ETClientApp extends AppCommandLine {
 		// SHORT ARBITRAGE means dividend information might be missing!
 		if (Math.abs(annualArbitragePercentage) >= AppConfig.arbitrageStrength) {
 			out.println(call.get("optionRootSymbol") + " :: " + expiry + " :: " + strikePrice + " :: " +
-					annualArbitragePercentage + "%" + " (" + dividendAdjustageArbitrage + ") " +
+					annualArbitragePercentage + "%" + " (" + dividendAdjustedArbitrage + ") " +
 					(shortArbitrage ? ANSI_GREEN + "[SHORT ARBITRAGE] " + ANSI_RESET : " ") +
 					(upcomingDividend ? ANSI_GREEN + "[UPCOMING DIVIDEND]" + ANSI_RESET : ""));
 		}
@@ -869,7 +869,7 @@ public class ETClientApp extends AppCommandLine {
 			if (positionType == PositionType.LONG) {
 				String putSymbol = getSymbolFromQuoteDetails((String) position.get("quoteDetails"));
 				longPutPrice = getCurrentMidPrice(ctx, putSymbol);
-				strikePrice = (Long) ((JSONObject)position.get("Product")).get("strikePrice");
+				strikePrice = (Long) ((JSONObject) position.get("Product")).get("strikePrice");
 			} else if (positionType == PositionType.SHORT) {
 				String callSymbol = getSymbolFromQuoteDetails((String) position.get("quoteDetails"));
 				shortCallPrice = getCurrentMidPrice(ctx, callSymbol);

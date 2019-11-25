@@ -16,7 +16,6 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.NonNull;
 import org.apache.log4j.Logger;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -54,7 +53,9 @@ public class Utils {
           for (Object quoteDatum : quoteData) {
             JSONObject innerObj = (JSONObject) quoteDatum;
             JSONObject all = (JSONObject) innerObj.get("All");
-            return ((Double) all.get("bid") + (Double) all.get("ask")) / 2;
+            // maybe `lastTrade` is a better estimate, it should also work better during non-trading hours
+            // return ((Double) all.get("bid") + (Double) all.get("ask")) / 2;
+            return (Double) all.get("lastTrade");
           }
         } else {
           log.error(" Error : Invalid stock symbol.");
@@ -72,43 +73,27 @@ public class Utils {
   }
 
   // This only works with JSONObject of quote response
-  public static double getExtrinsicOfCall(double currentPrice, @NonNull JSONObject call) {
-    double strikePrice = (Double) call.get("strikePrice");
-    double bid = (Double) call.get("bid");
-    double ask = (Double) call.get("ask");
+  // warning - this returns a negative value if it is too illiquid
+  public static double getExtrinsicValue(double underlyingPrice, JSONObject option, OptionsType optionsType) {
+    double strikePrice = (Double) option.get("strikePrice");
+    double bid = (Double) option.get("bid");
+    double ask = (Double) option.get("ask");
 
-    if (ask - bid > bid/5) {
+    if (ask > 1.03 * bid) {
       return -1.0;
     }
-    double callPrice = (bid + ask) / 2;
-    double intrinsic = (Double) call.get("strikePrice") > currentPrice ? 0.0 : currentPrice - strikePrice;
+    double optionsPrice = (bid + ask) / 2;
 
-    return Math.max(0.0, callPrice - intrinsic) * 100;
+    return getExtrinsicValue(strikePrice, underlyingPrice, optionsPrice, optionsType);
   }
 
-  // This only works with JSONObject of quote response
-  // currentPrice is the price of underlying stock
-  public static double getExtrinsicOfPut(double stockPrice, @NonNull JSONObject put) {
-    double strikePrice = (Double) put.get("strikePrice");
-    double bid = (Double) put.get("bid");
-    double ask = (Double) put.get("ask");
-
-    if (ask > 1.04 * bid) {
-      return -1.0;
-    }
-    double putPrice = (bid + ask) / 2;
-    double intrinsic = (Double) put.get("strikePrice") < stockPrice ? 0.0 : strikePrice - stockPrice;
-
-    return Math.max(0.0, putPrice - intrinsic) * 100;
-  }
-
-  // currentPrice is the price of option
   public static double getExtrinsicValue(double strikePrice, double underlyingPrice, double optionsPrice, OptionsType optionsType) {
     double intrinsic = 0;
+
     if (optionsType == OptionsType.CALL) {
-      intrinsic = underlyingPrice < optionsPrice ? underlyingPrice - strikePrice : 0;
+      intrinsic = strikePrice >= underlyingPrice ? 0.0 : underlyingPrice - strikePrice;
     } else if (optionsType == OptionsType.PUT) {
-      intrinsic = strikePrice > underlyingPrice ? strikePrice - underlyingPrice : 0;
+      intrinsic = strikePrice <= underlyingPrice ? 0.0 : strikePrice - underlyingPrice;
     }
 
     return Math.max(0.0, optionsPrice - intrinsic) * 100;
@@ -137,14 +122,7 @@ public class Utils {
 
         // todo : either check if ex dividend date is b/w now and expiry, or check ex dividend date + 3 months are b/w now and expiry
         if (System.currentTimeMillis() <= exDividendDate && exDividendDate <= expiryDate.getTimeInMillis()) {
-          //out.println("adding dividend");
           arbitrage += dividend*100;
-          // exclude amt strikes, they are more likely to get assign
-          double callDelta = (Double) ((JSONObject) call.get("OptionGreeks")).get("delta");
-          if (callDelta >= .16) {
-            return 0;
-          }
-          //out.println("ex dividend date : " + new Date(exDividendDate * 1000).toString());
         } else {
           // this might be ok in some cases after adding new if condition
           //out.println("not adding dividend");
@@ -159,12 +137,12 @@ public class Utils {
     return arbitrage;
   }
 
-  public static double calculateAnnualArbitrage(double currentPrice, int daysToExpiry, double dividendAdjustageArbitrage) {
+  public static double calculateAnnualArbitrage(double underlyingPrice, int daysToExpiry, double dividendAdjustageArbitrage) {
     double annualArbitrage = (dividendAdjustageArbitrage / daysToExpiry) * 365;
-    double margin = currentPrice * getMarginPercentage();
+    double margin = underlyingPrice * getMarginPercentage();
     // interest = prt/100 => r = interest * 100 / pt
     double annualArbitragePercentage = annualArbitrage * 100 / margin;
-    return Math.round(annualArbitragePercentage*100)/100.0;
+    return Math.round(annualArbitragePercentage*100) / 100.0;
   }
 
   public static Map<String, List<JSONObject>> getPositions(AnnotationConfigApplicationContext ctx) {
@@ -207,7 +185,7 @@ public class Utils {
   // TODO : this need a lot of improvement
   // next identify (short strangle + short option)
   // maybe need to return a mapping of strategy->positions
-  // one algo to find srategies is to start searching by num of positions.
+  // one algo to find strategies is to start searching by num of positions.
   // if num of positions is 4, it can only be iron condor or something managed in the same way
   // if it is 6, it can only be butterfly
   public static OptionsStrategy identityPositionType(List<JSONObject> value) {
