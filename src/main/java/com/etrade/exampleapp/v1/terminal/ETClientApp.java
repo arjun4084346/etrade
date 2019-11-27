@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Formatter;
@@ -663,31 +664,31 @@ public class ETClientApp extends AppCommandLine {
 		String expiryMonth = String.valueOf(cal.get(Calendar.MONTH) + 1);
 		String optionCategory = "ALL";
 		String includeWeekly = "true";
-		List<Pair> queryParams = new ArrayList<>();
+		List<Pair> commonQueryParams = new ArrayList<>();
 		// definitely required
-		queryParams.add(Pair.of("includeWeekly", "true"));
-		queryParams.add(Pair.of("optionCategory", "ALL"));
+		commonQueryParams.add(Pair.of("includeWeekly", "true"));
+		commonQueryParams.add(Pair.of("optionCategory", "ALL"));
 
 		// include?
-		queryParams.add(Pair.of("priceType", "ALL"));
+		commonQueryParams.add(Pair.of("priceType", "ALL"));
 
-		queryParams.add(Pair.of("expiryDay", "13"));
-		queryParams.add(Pair.of("expiryYear", "2019"));
-		queryParams.add(Pair.of("expiryMonth", "12"));
-		queryParams.add(Pair.of("noOfStrikes", "4"));
+		commonQueryParams.add(Pair.of("expiryDay", "13"));
+		commonQueryParams.add(Pair.of("expiryYear", "2019"));
+		commonQueryParams.add(Pair.of("expiryMonth", "12"));
+		commonQueryParams.add(Pair.of("noOfStrikes", "4"));
 
     String[] symbols = AppConfig.watchlist;
     //symbols = new String[]{"SMH"};
 
-		for (String symbol : symbols) {
-			queryParams.add(Pair.of("symbol", symbol));
-			double underlyingPrice = getCurrentMidPrice(ctx, symbol);
-			String noOfStrikes = String.valueOf(Math.round(underlyingPrice / 10));
-			//queryParams.add(Pair.of("noOfStrikes", noOfStrikes));
-			JSONObject optionsChain = getOptionsChain(symbol, queryParams);
-			processOptionsChain(underlyingPrice, optionsChain);
-			queryParams.remove(Pair.of("symbol", symbol));
-		}
+    Arrays.stream(symbols).forEach((symbol) -> {
+      List<Pair> queryParams = new ArrayList<>(commonQueryParams);
+      queryParams.add(Pair.of("symbol", symbol));
+      double underlyingPrice = getCurrentMidPrice(ctx, symbol);
+      String noOfStrikes = String.valueOf(Math.round(underlyingPrice / 10));
+      //queryParams.add(Pair.of("noOfStrikes", noOfStrikes));
+      JSONObject optionsChain = getOptionsChain(symbol, queryParams);
+      processOptionsChain(underlyingPrice, optionsChain);
+    });
 	}
 
 	private void processOptionsChain(double underlyingPrice, JSONObject optionsChain) {
