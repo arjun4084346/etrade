@@ -16,6 +16,7 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -99,6 +100,10 @@ public class Utils {
     return Math.max(0.0, optionsPrice - intrinsic) * 100;
   }
 
+  public static boolean isITM(JSONObject jsonObject) {
+    return (double) jsonObject.get("intrinsicValue") > 0;
+  }
+
   public static double findShortArbitrage(AnnotationConfigApplicationContext ctx, JSONObject call, Calendar expiryDate, double arbitrage) {
     String symbol = getSymbolFromQuoteDetails((String) call.get("symbol"));
     QuotesClient client = ctx.getBean(QuotesClient.class);
@@ -148,25 +153,29 @@ public class Utils {
   public static Map<String, List<JSONObject>> getPositions(AnnotationConfigApplicationContext ctx) {
     Map<String, List<JSONObject>> positionGroups = new HashMap<>();
     JSONParser jsonParser = new JSONParser();
+    List<Pair> queryParams = new ArrayList<>();
+    queryParams.add(Pair.of("view", "COMPLETE"));
+    queryParams.add(Pair.of("count", "150"));
 
     try {
       PortfolioClient client = ctx.getBean(PortfolioClient.class);
-      String response = client.getPortfolio();
+      String response = client.getPortfolio(queryParams);
       JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
       JSONObject portfolioResponse = (JSONObject) jsonObject.get("PortfolioResponse");
       JSONArray accountPortfolioArr = (JSONArray) portfolioResponse.get("AccountPortfolio");
 
-      for (Object value : accountPortfolioArr) {
-        JSONObject acctObj = (JSONObject) value;
-        JSONArray positionArr = (JSONArray) acctObj.get("Position");
+      for (Object acctObj : accountPortfolioArr) {
+        long totalPages = (long) ((JSONObject)acctObj).get("totalPages");
+        if (totalPages > 1) {
+          throw new RuntimeException("Too many positions, either increase the `count` parameter, or re-query with `pageNumber` parameter.");
+        }
+        JSONArray positionArr = (JSONArray) ((JSONObject)acctObj).get("Position");
 
-        for (Object o : positionArr) {
-          JSONObject innerObj = (JSONObject) o;
-          //percentageGainManagement(innerObj);
-          JSONObject product = (JSONObject) innerObj.get("Product");
+        for (Object innerObj : positionArr) {
+          JSONObject product = (JSONObject) ((JSONObject) innerObj).get("Product");
           String symbol = (String) product.get("symbol");
           List<JSONObject> positions = positionGroups.getOrDefault(symbol, new ArrayList<>());
-          positions.add(innerObj);
+          positions.add((JSONObject) innerObj);
           positionGroups.put(symbol, positions);
         }
       }
@@ -184,7 +193,8 @@ public class Utils {
 
   // TODO : this need a lot of improvement
   // next identify (short strangle + short option)
-  // maybe need to return a mapping of strategy->positions
+  // maybe need to return a mapping of strategy->positions (IMP)
+  // and then treat different parts of the same underlying in different ways to help not `manageDelta` not mess up with spreads
   // one algo to find strategies is to start searching by num of positions.
   // if num of positions is 4, it can only be iron condor or something managed in the same way
   // if it is 6, it can only be butterfly
@@ -232,17 +242,23 @@ public class Utils {
     } else if (numOfLongCalls == 0
         && numOfLongPuts == 0
         && numOfShortCalls > 0
-        && numOfShortPuts == 0) {
+        && numOfShortPuts == 0
+        && numOfShares == 0) {
       return OptionsStrategy.SHORT_CALL;
     } else if (numOfLongCalls == 0
         && numOfLongPuts == 0
         && numOfShortPuts > 0
-        && numOfShortCalls == 0) {
-      return OptionsStrategy.SHORT_CALL;
+        && numOfShortCalls == 0
+        && numOfShares == 0) {
+      return OptionsStrategy.SHORT_PUT;
     } else if ((numOfShortCalls == numOfLongCalls) || (numOfLongPuts == numOfShortPuts)) {
       return OptionsStrategy.SPREAD;
+    } else if (numOfShares/100 == numOfShortCalls) {
+      return OptionsStrategy.COVERED_CALL;
+    } else if (numOfShares/-100 == numOfShortPuts) {
+      return OptionsStrategy.SECURED_PUT;
     }
-    return OptionsStrategy.UNSUPPORTED;
+    return OptionsStrategy.OTHERS;
   }
 
   public static String getSymbolFromQuoteDetails(String quoteDetail) {
@@ -316,12 +332,14 @@ public class Utils {
     // take dividend into account, notice if drop happens only on one day or gradually?
     // also if the security is hard to borrow? whats the interest rate, if any?
     SPREAD,
-    // we are not yet ready to distinguish debit and credit spreads
+    // we are not yet ready to distinguish debit and credit spreads. why?
     CREDIT_SPREAD,
     SHORT_PUT,
     SHORT_CALL,
+    COVERED_CALL,
+    SECURED_PUT,
     SHORT_BROKEN_WING_BUTTERFLY,
-    UNSUPPORTED
+    OTHERS
   }
 
   public enum SecurityType {

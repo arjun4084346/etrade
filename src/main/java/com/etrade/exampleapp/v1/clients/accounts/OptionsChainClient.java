@@ -8,7 +8,6 @@ import com.etrade.exampleapp.v1.oauth.model.ContentType;
 import com.etrade.exampleapp.v1.oauth.model.Message;
 import com.etrade.exampleapp.v1.oauth.model.OauthRequired;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -31,19 +30,12 @@ public class OptionsChainClient extends Client {
     return String.format("%s%s", apiResource.getApiBaseUrl(), apiResource.getOptionsChainUri());
   }
 
-  public String getQueryParam(List<Pair> queryParams) {
-    return queryParams.stream()
-        .map(pair -> pair.getLeft() + "=" + pair.getRight())
-        .collect(Collectors.joining("&"));
-  }
-
-
   /*
    * Client will provide REALTIME quotes only in case of client holding the valid access token/secret(ie, if the user accessed protected resource) and should have
    * accepted the market data agreement on website.
    * if the user  has not authorized the client, this client will return DELAYED quotes.
    */
-  public String getOptionsChain(String symbol, List<Pair> queryParams)  throws ApiException {
+  public String getOptionsChain(List<Pair> queryParams)  throws ApiException {
     Message message = new Message();
 
     message.setOauthRequired(OauthRequired.YES);

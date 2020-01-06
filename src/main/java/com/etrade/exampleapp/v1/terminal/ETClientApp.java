@@ -5,9 +5,8 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
-import java.util.Date;
+import java.util.Collections;
 import java.util.Formatter;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -179,7 +178,8 @@ public class ETClientApp extends AppCommandLine {
 				case 4:
 					out.println("Please enter stock symbol: ");
 					symbol = KeyIn.getKeyInString();
-					getOptionsChain(symbol, new ArrayList<>());
+					List<Pair> queryParams = Collections.singletonList(Pair.of("symbol", symbol));
+					getOptionsChain(queryParams);
 					break;
 				case 5:
 					findArbitrageOpportunities();
@@ -641,11 +641,11 @@ public class ETClientApp extends AppCommandLine {
 		}
 	}
 
-	private JSONObject getOptionsChain(String symbol, List<Pair> queryParams) {
+	private JSONObject getOptionsChain(List<Pair> queryParams) {
 		OptionsChainClient client = ctx.getBean(OptionsChainClient.class);
 
 		try {
-			String response = client.getOptionsChain(symbol, queryParams);
+			String response = client.getOptionsChain(queryParams);
 			JSONParser jsonParser = new JSONParser();
 			JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
 			return (JSONObject) jsonObject.get("OptionChainResponse");
@@ -664,31 +664,31 @@ public class ETClientApp extends AppCommandLine {
 		String expiryMonth = String.valueOf(cal.get(Calendar.MONTH) + 1);
 		String optionCategory = "ALL";
 		String includeWeekly = "true";
-		List<Pair> commonQueryParams = new ArrayList<>();
+		List<Pair> queryParams = new ArrayList<>();
 		// definitely required
-		commonQueryParams.add(Pair.of("includeWeekly", "true"));
-		commonQueryParams.add(Pair.of("optionCategory", "ALL"));
+		queryParams.add(Pair.of("includeWeekly", "true"));
+		queryParams.add(Pair.of("optionCategory", "ALL"));
 
 		// include?
-		commonQueryParams.add(Pair.of("priceType", "ALL"));
+		queryParams.add(Pair.of("priceType", "ALL"));
 
-		commonQueryParams.add(Pair.of("expiryDay", "13"));
-		commonQueryParams.add(Pair.of("expiryYear", "2019"));
-		commonQueryParams.add(Pair.of("expiryMonth", "12"));
-		commonQueryParams.add(Pair.of("noOfStrikes", "4"));
+		//queryParams.add(Pair.of("expiryDay", "13"));
+		queryParams.add(Pair.of("expiryYear", "2020"));
+		queryParams.add(Pair.of("expiryMonth", "1"));
+		queryParams.add(Pair.of("noOfStrikes", "8"));
 
     String[] symbols = AppConfig.watchlist;
-    //symbols = new String[]{"SMH"};
+    //symbols = new String[]{"SHOP"};
 
-    Arrays.stream(symbols).forEach((symbol) -> {
-      List<Pair> queryParams = new ArrayList<>(commonQueryParams);
-      queryParams.add(Pair.of("symbol", symbol));
-      double underlyingPrice = getCurrentMidPrice(ctx, symbol);
-      String noOfStrikes = String.valueOf(Math.round(underlyingPrice / 10));
-      //queryParams.add(Pair.of("noOfStrikes", noOfStrikes));
-      JSONObject optionsChain = getOptionsChain(symbol, queryParams);
-      processOptionsChain(underlyingPrice, optionsChain);
-    });
+		for (String symbol : symbols) {
+			queryParams.add(Pair.of("symbol", symbol));
+			double underlyingPrice = getCurrentMidPrice(ctx, symbol);
+			String noOfStrikes = String.valueOf(Math.round(underlyingPrice / 10));
+			//queryParams.add(Pair.of("noOfStrikes", noOfStrikes));
+			JSONObject optionsChain = getOptionsChain(queryParams);
+			processOptionsChain(underlyingPrice, optionsChain);
+			queryParams.remove(Pair.of("symbol", symbol));
+		}
 	}
 
 	private void processOptionsChain(double underlyingPrice, JSONObject optionsChain) {
@@ -780,6 +780,7 @@ public class ETClientApp extends AppCommandLine {
 				case SHORT_PUT:
 				case SHORT_CALL:
 				case SHORT_STRANGLE:
+					manageDelta(entry.getValue());
           manageShortStrangle(entry.getValue());
 					break;
 				case LONG_ARBITRAGE:
@@ -787,16 +788,83 @@ public class ETClientApp extends AppCommandLine {
 					break;
 				case SHORT_STRADDLE:
 				// TODO : add more management strategies
-
-				case UNSUPPORTED:
-					out.println(ANSI_RED + "[ERROR] : UNSUPPORTED STRATEGY for " + entry.getKey() + ANSI_RESET);
+					break;
+				case OTHERS:
+					manageDelta(entry.getValue());
 				default:
 					break;
 			}
 		}
 	}
 
-  private void manageShortStrangle(List<JSONObject> positions) {
+	private void manageDelta(List<JSONObject> positions) {
+		double totalDelta = 0;
+		double netDeltaPerContract = 0;
+		int numOfITMcalls = 0;
+		int numOfITMPuts = 0;
+		double callDelta = 0;
+		double maxPutDelta = Double.MIN_VALUE;
+		double maxCallDelta = Double.MAX_VALUE;
+		double putDelta = 0;
+		long numOfCalls = 0;	//spreads should results in 0
+		long numOfPuts = 0;
+		int highDeltaCalls = 0;
+		int highDeltaPuts = 0;
+		boolean adjustmentNeeded = false;
+		String underlyingSymbol = (String) ((JSONObject) positions.get(0).get("Product")).get("symbol");
+
+		for (JSONObject position : positions) {
+			JSONObject positionProductData = (JSONObject) position.get("Product");
+			JSONObject positionCompleteData = (JSONObject) position.get("Complete");
+			double delta = (double) positionCompleteData.get("delta");
+			OptionsType optionsType = OptionsType.valueOf((String) positionProductData.get("callPut"));
+			PositionType positionType = PositionType.valueOf((String) position.get("positionType"));
+			long quantity = Math.abs((long) position.get("quantity"));
+			boolean itm = isITM(positionCompleteData);
+
+			if (OptionsType.CALL == optionsType) {
+				if (itm) {
+					numOfITMcalls++;
+				}
+				numOfCalls += quantity;
+				delta = positionType.equals(PositionType.LONG) ? delta : -1 * delta;
+				callDelta += delta * quantity;
+				if (delta < -0.20) {
+					highDeltaCalls++;
+				}
+				maxCallDelta = Math.min(maxCallDelta, delta);
+			} else {
+				if (itm) {
+					numOfITMPuts++;
+				}
+				numOfPuts += quantity;
+				delta = positionType.equals(PositionType.LONG) ? delta : -1 * delta;
+				putDelta += delta * quantity;
+				if (delta > 0.20) {
+					highDeltaPuts++;
+				}
+				maxPutDelta = Math.max(maxPutDelta, delta);
+			}
+		}
+
+		totalDelta = putDelta + callDelta;
+		netDeltaPerContract = totalDelta / (Math.min(numOfCalls, numOfPuts));
+
+		if (numOfITMcalls > highDeltaPuts ||
+				numOfITMPuts > highDeltaCalls ||
+				netDeltaPerContract < -0.40 ||
+				netDeltaPerContract > 0.40 ||
+				maxCallDelta < -0.80 ||
+				maxPutDelta > 0.80) {
+			adjustmentNeeded = true;
+		}
+
+		if (adjustmentNeeded) {
+			out.println(underlyingSymbol + " needs delta adjustment.");
+		}
+	}
+
+	private void manageShortStrangle(List<JSONObject> positions) {
 		// keep in mind that eligibility for managing is a different thing and being able to roll is different
 		// the later part involves data about IV earnings, to decide roll/close/strike/expiry - out of scope
     for (JSONObject position : positions) {
@@ -806,7 +874,6 @@ public class ETClientApp extends AppCommandLine {
       timeManagement(position);
       // TODO manage one itm leg
     }
-		//moneynessManagement(positions);
   }
 
 //	private void manageShortStrangle(Pair<JSONObject, JSONObject> positions) {
