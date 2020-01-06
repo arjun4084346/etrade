@@ -1,5 +1,8 @@
 package com.etrade.exampleapp.v1.clients.accounts;
 
+import java.util.Collections;
+import java.util.List;
+import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import com.etrade.exampleapp.v1.clients.Client;
@@ -44,15 +47,25 @@ public class PortfolioClient extends Client {
 	}
 
 	public String getPortfolio() throws ApiException {
-		return getPortfolio(null);
+		return getPortfolio(null, Collections.EMPTY_LIST);
 	}
-	public String getPortfolio(final String accountIdKey) throws ApiException{
+
+	public String getPortfolio(String accountIdKey) throws ApiException {
+		return getPortfolio(accountIdKey, Collections.EMPTY_LIST);
+	}
+
+	public String getPortfolio(List<Pair> queryParams) throws ApiException {
+		return getPortfolio(null, queryParams);
+	}
+
+	public String getPortfolio(final String accountIdKey, List<Pair> queryParams) throws ApiException{
 		log.debug(" Calling Portfolio API " + getURL(accountIdKey));
 
 		Message message = new Message();
 		message.setOauthRequired(OauthRequired.YES);
 		message.setHttpMethod(getHttpMethod());
 		message.setUrl(getURL(accountIdKey));
+		message.setQueryString(getQueryParam(queryParams));
 		message.setContentType(ContentType.APPLICATION_JSON);
 
 		return oauthManager.invoke(message);
