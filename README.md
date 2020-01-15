@@ -10,6 +10,7 @@ The example application provides an environment for testing and validating the s
 
 ## Requirements
  - Java 1.8 or later.
+ - Maven 3.0.3 or later
  - An [E*TRADE](https://us.etrade.com) account.
  - E*TRADE consumer key and consumer secret.
 	
@@ -18,10 +19,11 @@ The example application provides an environment for testing and validating the s
  - Update oauth keys in the oauth.properties file available with source.
 
 ## Running Code 
-```
-./gradlew runApp
-```
- 
+
+ - Run `maven clean install`
+ - If you encounter any issues to run `maven clean install` command, please change file permissions on the source folder.
+ - From the Root project directory, run the `run` script for mac/linux environment. For Windows, use `run.bat`.
+
 ## Features
  - Sandbox
    * Account List

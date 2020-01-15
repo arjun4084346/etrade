@@ -1,6 +1,5 @@
 package com.etrade.exampleapp.v1.clients.accounts;
 
-import java.util.Collections;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +11,9 @@ import com.etrade.exampleapp.v1.oauth.model.ApiResource;
 import com.etrade.exampleapp.v1.oauth.model.ContentType;
 import com.etrade.exampleapp.v1.oauth.model.Message;
 import com.etrade.exampleapp.v1.oauth.model.OauthRequired;
+import com.etrade.exampleapp.v1.terminal.AppConfig;
+
+import com.google.common.collect.Lists;
 
 /*
  *
@@ -47,11 +49,11 @@ public class PortfolioClient extends Client {
 	}
 
 	public String getPortfolio() throws ApiException {
-		return getPortfolio(null, Collections.EMPTY_LIST);
+		return getPortfolio(null, Lists.newArrayList());
 	}
 
 	public String getPortfolio(String accountIdKey) throws ApiException {
-		return getPortfolio(accountIdKey, Collections.EMPTY_LIST);
+		return getPortfolio(accountIdKey, Lists.newArrayList());
 	}
 
 	public String getPortfolio(List<Pair> queryParams) throws ApiException {
@@ -60,6 +62,10 @@ public class PortfolioClient extends Client {
 
 	public String getPortfolio(final String accountIdKey, List<Pair> queryParams) throws ApiException{
 		log.debug(" Calling Portfolio API " + getURL(accountIdKey));
+
+		queryParams.add(Pair.of("sortBy", "SYMBOL"));
+    queryParams.add(Pair.of("view", "COMPLETE"));
+    queryParams.add(Pair.of("count", AppConfig.maxNumOfPositions));
 
 		Message message = new Message();
 		message.setOauthRequired(OauthRequired.YES);

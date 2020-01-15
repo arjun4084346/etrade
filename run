@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+export JAVA_PROGRAM_ARGS=`echo "$@"`
+mvn exec:java -Dexec.mainClass="com.etrade.exampleapp.v1.terminal.ETClientApp" -Dexec.cleanupDaemonThreads="false" -Dexec.args="$JAVA_PROGRAM_ARGS" -e

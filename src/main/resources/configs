@@ -6,7 +6,17 @@ arbitrageStrengthDollars=30
 #portfolio management configs
 targetGainPercentage=66
 // TODO verify if alerts about option expiring next to next week's friday on this week's thursday
-criticalDTE=15
-noManagementPeriod=17
+criticalDTE=21
+noManagementPeriod=25
+highIVRank=30.0
 
 autoMode.sleepTime=60
+
+maxNumOfPositions=150
+
+// level1 delta is the minimum delta per contract the opposite side of the short strangle should have if one leg is got into ITM
+// level2 delta is the maximum net delta of all the positions of an underlying can have
+// level3 delta is the maximum delta per contract any short leg can have, no matter what
+level1Delta=0.20
+level2Delta=0.40
+level3Delta=0.80

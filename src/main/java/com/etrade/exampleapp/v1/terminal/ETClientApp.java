@@ -9,10 +9,12 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.Formatter;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import java.util.Set;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 import org.json.simple.JSONArray;
@@ -470,7 +472,7 @@ public class ETClientApp extends AppCommandLine {
 					responseData[2] = prdObj.get("securityType");
 					formatString.append(" %25s");
 
-					JSONObject quickObj = (JSONObject) innerObj.get("Quick");
+					JSONObject quickObj = (JSONObject) innerObj.get("Complete");
 
 					if(Double.class.isAssignableFrom(quickObj.get("lastTrade").getClass())) {
 						responseData[3] =  quickObj.get("lastTrade");
@@ -773,105 +775,152 @@ public class ETClientApp extends AppCommandLine {
 
 	private void managePortfolio() {
 		Map<String, List<JSONObject>> positionGroups = getPositions(ctx);
+		Set<String> managedPositions = new HashSet<>();
 
 		for (Map.Entry<String, List<JSONObject>> entry : positionGroups.entrySet()) {
-			OptionsStrategy optionsStrategy = identityPositionType(entry.getValue());
+//			if (!entry.getKey().equalsIgnoreCase("WBA")) {
+//				continue;
+//			}
+			OptionsStrategy optionsStrategy = identifyPositionType(entry.getValue());
 			switch (optionsStrategy) {
 				case SHORT_PUT:
 				case SHORT_CALL:
 				case SHORT_STRANGLE:
-					manageDelta(entry.getValue());
-          manageShortStrangle(entry.getValue());
+					manageDelta(entry.getValue(), managedPositions, OptionsStrategy.SHORT_STRANGLE);
+          manageShortStrangle(entry.getValue(), managedPositions);
+					break;
+				case COVERED_CALL:
+					manageDelta(entry.getValue(), managedPositions, OptionsStrategy.COVERED_CALL, 0.30, 0.50, .90);
 					break;
 				case LONG_ARBITRAGE:
-					manageLongArbitrage(entry.getKey(), entry.getValue());
+					manageLongArbitrage(entry.getKey(), entry.getValue(), managedPositions);
 					break;
 				case SHORT_STRADDLE:
 				// TODO : add more management strategies
 					break;
 				case OTHERS:
-					manageDelta(entry.getValue());
+					manageDelta(entry.getValue(), managedPositions, OptionsStrategy.OTHERS);
 				default:
 					break;
 			}
 		}
 	}
 
-	private void manageDelta(List<JSONObject> positions) {
+	private void manageDelta(List<JSONObject> positions, Set<String> managedPositions, OptionsStrategy strategy) {
+		manageDelta(positions, managedPositions, strategy, AppConfig.level1Delta, AppConfig.level2Delta, AppConfig.level3Delta);
+	}
+
+	private void manageDelta(List<JSONObject> positions, Set<String> managedPositions, OptionsStrategy strategy,
+			double level1Delta, double level2Delta, double level3Delta) {
+		double callDelta = 0;
+		double putDelta = 0;
+		double equityDelta = 0;
 		double totalDelta = 0;
 		double netDeltaPerContract = 0;
-		int numOfITMcalls = 0;
-		int numOfITMPuts = 0;
-		double callDelta = 0;
 		double maxPutDelta = Double.MIN_VALUE;
 		double maxCallDelta = Double.MAX_VALUE;
-		double putDelta = 0;
 		long numOfCalls = 0;	//spreads should results in 0
 		long numOfPuts = 0;
+		int numOfITMcalls = 0;
+		int numOfITMPuts = 0;
 		int highDeltaCalls = 0;
 		int highDeltaPuts = 0;
+		long numOfShares = 0;
 		boolean adjustmentNeeded = false;
 		String underlyingSymbol = (String) ((JSONObject) positions.get(0).get("Product")).get("symbol");
+
+		if (managedPositions.contains(underlyingSymbol)) {
+			return;
+		}
 
 		for (JSONObject position : positions) {
 			JSONObject positionProductData = (JSONObject) position.get("Product");
 			JSONObject positionCompleteData = (JSONObject) position.get("Complete");
-			double delta = (double) positionCompleteData.get("delta");
-			OptionsType optionsType = OptionsType.valueOf((String) positionProductData.get("callPut"));
-			PositionType positionType = PositionType.valueOf((String) position.get("positionType"));
+			SecurityType securityType = SecurityType.valueOf((String) positionProductData.get("securityType"));
 			long quantity = Math.abs((long) position.get("quantity"));
-			boolean itm = isITM(positionCompleteData);
+			double delta = 0;
 
-			if (OptionsType.CALL == optionsType) {
-				if (itm) {
-					numOfITMcalls++;
-				}
-				numOfCalls += quantity;
-				delta = positionType.equals(PositionType.LONG) ? delta : -1 * delta;
-				callDelta += delta * quantity;
-				if (delta < -0.20) {
-					highDeltaCalls++;
-				}
-				maxCallDelta = Math.min(maxCallDelta, delta);
+			if (securityType.equals(SecurityType.EQ)) {
+				equityDelta = quantity/100;
+				numOfShares = quantity;
 			} else {
-				if (itm) {
-					numOfITMPuts++;
+				delta = (double) positionCompleteData.get("delta");
+				OptionsType optionsType = OptionsType.valueOf((String) positionProductData.get("callPut"));
+				PositionType positionType = PositionType.valueOf((String) position.get("positionType"));
+				boolean itm = isITM(positionCompleteData);
+
+				if (OptionsType.CALL == optionsType) {
+					if (itm) {
+						numOfITMcalls++;
+					}
+					numOfCalls += quantity;
+					delta = positionType.equals(PositionType.LONG) ? delta : -1 * delta;
+					callDelta += delta * quantity;
+					if (delta < -level1Delta) {
+						highDeltaCalls++;
+					}
+					maxCallDelta = Math.min(maxCallDelta, delta);
+				} else {
+					if (itm) {
+						numOfITMPuts++;
+					}
+					numOfPuts += quantity;
+					delta = positionType.equals(PositionType.LONG) ? delta : -1 * delta;
+					putDelta += delta * quantity;
+					if (delta > level1Delta) {
+						highDeltaPuts++;
+					}
+					maxPutDelta = Math.max(maxPutDelta, delta);
 				}
-				numOfPuts += quantity;
-				delta = positionType.equals(PositionType.LONG) ? delta : -1 * delta;
-				putDelta += delta * quantity;
-				if (delta > 0.20) {
-					highDeltaPuts++;
-				}
-				maxPutDelta = Math.max(maxPutDelta, delta);
 			}
 		}
 
-		totalDelta = putDelta + callDelta;
+		totalDelta = putDelta + callDelta + equityDelta;
 		netDeltaPerContract = totalDelta / (Math.min(numOfCalls, numOfPuts));
 
-		if (numOfITMcalls > highDeltaPuts ||
-				numOfITMPuts > highDeltaCalls ||
-				netDeltaPerContract < -0.40 ||
-				netDeltaPerContract > 0.40 ||
-				maxCallDelta < -0.80 ||
-				maxPutDelta > 0.80) {
-			adjustmentNeeded = true;
+		switch (strategy) {
+			case COVERED_CALL:
+				if (Math.abs(callDelta) < level1Delta * numOfShares / 100) {
+					adjustmentNeeded = true;
+				}
+				break;
+			case CREDIT_SPREAD:
+				if (maxCallDelta > 2) {
+					adjustmentNeeded = true;
+				}
+			default:
+				if (numOfITMcalls > highDeltaPuts ||
+						numOfITMPuts > highDeltaCalls ||
+						netDeltaPerContract < -level2Delta ||
+						netDeltaPerContract > level2Delta ||
+						maxCallDelta < -level3Delta ||
+						maxPutDelta > level3Delta) {
+					adjustmentNeeded = true;
+				}
 		}
+
+
 
 		if (adjustmentNeeded) {
 			out.println(underlyingSymbol + " needs delta adjustment.");
 		}
 	}
 
-	private void manageShortStrangle(List<JSONObject> positions) {
+	private void manageShortStrangle(List<JSONObject> positions, Set<String> managedPositions) {
 		// keep in mind that eligibility for managing is a different thing and being able to roll is different
 		// the later part involves data about IV earnings, to decide roll/close/strike/expiry - out of scope
-    for (JSONObject position : positions) {
-      percentageGainManagement(position);
+
+		String underlyingSymbol = (String) ((JSONObject) positions.get(0).get("Product")).get("symbol");
+
+		if (managedPositions.contains(underlyingSymbol)) {
+			return;
+		}
+
+		for (JSONObject position : positions) {
+      percentageGainManagement(position, managedPositions);
       // todo if 14 days are left, time to manage.
       //  if cant be rolled => if can be rolled roll, otherwise close if both legs are in profit
-      timeManagement(position);
+      timeManagement(position, managedPositions);
       // TODO manage one itm leg
     }
   }
@@ -922,11 +971,15 @@ public class ETClientApp extends AppCommandLine {
 //		// moneynessManagement(positions);
 //	}
 
-	private void manageLongArbitrage(String symbol, List<JSONObject> positions) {
+	private void manageLongArbitrage(String symbol, List<JSONObject> positions, Set<String> managedPositions) {
 		double shortCallPrice = 0;
 		double longPutPrice = 0;
 		double strikePrice = 0;
 		double underlyingPrice = getCurrentMidPrice(ctx, symbol);
+
+		if (managedPositions.contains(symbol)) {
+			return;
+		}
 
 		for (JSONObject position : positions) {
 			PositionType positionType = PositionType.valueOf((String) position.get("positionType"));
@@ -952,33 +1005,24 @@ public class ETClientApp extends AppCommandLine {
 		}
 	}
 
-  private void percentageGainManagement(JSONObject position) {
+  private void percentageGainManagement(JSONObject position, Set<String> managedPositions) {
+		double totalPercentageGain = 0;
+		double ivRank = 0.0;
     if (Double.class.isAssignableFrom(position.get("totalGainPct").getClass())) {
-      double totalPercentageGain = (double) position.get("totalGainPct");
-      if (totalPercentageGain > AppConfig.targetGainPercentage) {
-        out.println("Target achieved for : " + position.get("symbolDescription"));
-      }
-    } else {
+      totalPercentageGain = (double) position.get("totalGainPct");
+    } else if (Long.class.isAssignableFrom(position.get("totalGainPct").getClass())) {
+			totalPercentageGain = (long) position.get("totalGainPct");
+		} else {
 			out.println(ANSI_RED + "[ERROR] : " + ANSI_RESET + Thread.currentThread().getStackTrace()[2].getLineNumber());
 		}
+
+		if (totalPercentageGain > AppConfig.targetGainPercentage) {
+			// TODO : how to find iv rank???
+			// && ivRank > AppConfig.highIVRank) {
+			out.println("Target achieved for : " + position.get("symbolDescription"));
+			managedPositions.add((String) position.get("symbolDescription"));
+		}
   }
-
-//	private boolean profitManagement(JSONObject position) {
-//		if (Double.class.isAssignableFrom(position.get("totalGainPct").getClass())) {
-//			double totalPercentageGain = (double) position.get("totalGainPct");
-//			return totalPercentageGain >= AppConfig.targetGainPercentage;
-//		}
-//		return false;
-//	}
-	//
-
-//	private  double profitPercentage(JSONObject position) {
-//		if (Double.class.isAssignableFrom(position.get("totalGainPct").getClass())) {
-//			return (double) position.get("totalGainPct");
-//		} else {
-//			return 0.0;
-//		}
-//	}
 
 	private  double profit(JSONObject position) {
 		if (Double.class.isAssignableFrom(position.get("totalGain").getClass())) {
@@ -989,10 +1033,10 @@ public class ETClientApp extends AppCommandLine {
 		}
 	}
 
-	private void timeManagement(JSONObject position) {
+	private void timeManagement(JSONObject position, Set<String> managedPositions) {
     Calendar expiryDate = getExpiryFromJson(position, "quoteDetails");
     int daysToExpiry = getDaysToExpiry(expiryDate);
-    if (daysToExpiry <= AppConfig.criticalDTE && profit(position) > 0) {
+    if (daysToExpiry < AppConfig.criticalDTE && profit(position) > 0) {
 			// time management does not depend upon IV
     	//long earningsDate = (long) position.get("earnings");
 			//earningsDate -= 20000;
@@ -1003,6 +1047,7 @@ public class ETClientApp extends AppCommandLine {
 			//		&& other leg is in loss	) {
 			// todo : if (earnings are near or iv is low) and total position is in net loss, do not print
 				out.println("Position " + position.get("symbolDescription") + " too close to expiry.");
+				managedPositions.add((String) position.get("symbolDescription"));
 			//}
 		}
   }
