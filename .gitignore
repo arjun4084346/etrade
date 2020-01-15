@@ -20,3 +20,6 @@ build/
 
 # Build files
 target/
+
+# plugin generated
+lombok.config
