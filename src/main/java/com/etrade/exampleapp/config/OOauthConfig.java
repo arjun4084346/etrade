@@ -6,13 +6,21 @@ package com.etrade.exampleapp.config;
  * Bootstrapped using AnnotationConfigApplicationContext on client startup.
  * oauth related properties will be injected from property file available in classpath.
  */
+import com.etrade.exampleapp.v1.clients.accounts.AccountListClient;
+import com.etrade.exampleapp.v1.clients.accounts.BalanceClient;
 import com.etrade.exampleapp.v1.clients.accounts.OptionsChainClient;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-
-import javax.net.ssl.SSLContext;
-
+import com.etrade.exampleapp.v1.clients.accounts.PortfolioClient;
+import com.etrade.exampleapp.v1.clients.market.QuotesClient;
+import com.etrade.exampleapp.v1.clients.order.OrderClient;
+import com.etrade.exampleapp.v1.clients.order.OrderPreviewClient;
+import com.etrade.exampleapp.v1.exception.RestTemplateResponseErrorHandler;
+import com.etrade.exampleapp.v1.oauth.*;
+import com.etrade.exampleapp.v1.oauth.model.ApiResource;
+import com.etrade.exampleapp.v1.oauth.model.Resource;
+import com.etrade.exampleapp.v1.oauth.model.SecurityContext;
+import com.etrade.exampleapp.v1.oauth.model.Signer;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
@@ -40,30 +48,16 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.util.MultiValueMap;
 
-import com.etrade.exampleapp.v1.clients.accounts.AccountListClient;
-import com.etrade.exampleapp.v1.clients.accounts.BalanceClient;
-import com.etrade.exampleapp.v1.clients.accounts.PortfolioClient;
-import com.etrade.exampleapp.v1.clients.market.QuotesClient;
-import com.etrade.exampleapp.v1.clients.order.OrderClient;
-import com.etrade.exampleapp.v1.clients.order.OrderPreviewClient;
-import com.etrade.exampleapp.v1.exception.RestTemplateResponseErrorHandler;
-import com.etrade.exampleapp.v1.oauth.AccessTokenService;
-import com.etrade.exampleapp.v1.oauth.AppController;
-import com.etrade.exampleapp.v1.oauth.CustomRestTemplate;
-import com.etrade.exampleapp.v1.oauth.RequestTokenService;
-import com.etrade.exampleapp.v1.oauth.model.ApiResource;
-import com.etrade.exampleapp.v1.oauth.model.Resource;
-import com.etrade.exampleapp.v1.oauth.model.SecurityContext;
-import com.etrade.exampleapp.v1.oauth.model.Signer;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.etrade.exampleapp.v1.oauth.AuthorizationService;
+import javax.net.ssl.SSLContext;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
 
 @EnableWebSecurity
 @Configuration
 @PropertySource("classpath:oauth.properties")
 @ComponentScan(basePackages = { "com.etrade.example.*" })
-public class OOauthConfig extends WebSecurityConfigurerAdapter{
+public class OOauthConfig extends WebSecurityConfigurerAdapter {
 
 	@Value("${oauth.baseUrl}")
 	private String baseUrl;
