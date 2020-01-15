@@ -5,6 +5,7 @@ import com.etrade.exampleapp.v1.clients.market.QuotesClient;
 import com.etrade.exampleapp.v1.clients.order.OrderTerm;
 import com.etrade.exampleapp.v1.clients.order.PriceType;
 import com.etrade.exampleapp.v1.exception.ApiException;
+import com.etrade.exampleapp.v1.terminal.AppConfig;
 import com.etrade.exampleapp.v1.terminal.ETClientApp;
 import java.io.PrintStream;
 import java.time.Instant;
@@ -16,6 +17,7 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 import org.json.simple.JSONArray;
@@ -151,15 +153,12 @@ public class Utils {
   }
 
   public static Map<String, List<JSONObject>> getPositions(AnnotationConfigApplicationContext ctx) {
-    Map<String, List<JSONObject>> positionGroups = new HashMap<>();
+    Map<String, List<JSONObject>> positionGroups = new TreeMap<>();
     JSONParser jsonParser = new JSONParser();
-    List<Pair> queryParams = new ArrayList<>();
-    queryParams.add(Pair.of("view", "COMPLETE"));
-    queryParams.add(Pair.of("count", "150"));
 
     try {
       PortfolioClient client = ctx.getBean(PortfolioClient.class);
-      String response = client.getPortfolio(queryParams);
+      String response = client.getPortfolio();
       JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
       JSONObject portfolioResponse = (JSONObject) jsonObject.get("PortfolioResponse");
       JSONArray accountPortfolioArr = (JSONArray) portfolioResponse.get("AccountPortfolio");
@@ -198,7 +197,7 @@ public class Utils {
   // one algo to find strategies is to start searching by num of positions.
   // if num of positions is 4, it can only be iron condor or something managed in the same way
   // if it is 6, it can only be butterfly
-  public static OptionsStrategy identityPositionType(List<JSONObject> value) {
+  public static OptionsStrategy identifyPositionType(List<JSONObject> value) {
     int numOfShortCalls = 0;
     int numOfLongCalls = 0;
     int numOfShortPuts = 0;
@@ -251,11 +250,11 @@ public class Utils {
         && numOfShortCalls == 0
         && numOfShares == 0) {
       return OptionsStrategy.SHORT_PUT;
-    } else if ((numOfShortCalls == numOfLongCalls) || (numOfLongPuts == numOfShortPuts)) {
+    } else if ((numOfShortCalls == numOfLongCalls) && (numOfLongPuts == numOfShortPuts)) {
       return OptionsStrategy.SPREAD;
-    } else if (numOfShares/100 == numOfShortCalls) {
+    } else if (Math.abs(numOfShares)/100 >= numOfShortCalls && numOfShares > 0) {
       return OptionsStrategy.COVERED_CALL;
-    } else if (numOfShares/-100 == numOfShortPuts) {
+    } else if (Math.abs(numOfShares)/100 >= numOfShortPuts && numOfShares < 0) {
       return OptionsStrategy.SECURED_PUT;
     }
     return OptionsStrategy.OTHERS;
@@ -267,6 +266,10 @@ public class Utils {
   }
 
   public static Calendar getExpiryFromJson(JSONObject object, String key) {
+    if (((String)((JSONObject) object.get("Product")).get("securityType")).equalsIgnoreCase(SecurityType.EQ.name())) {
+      return null;
+    }
+
     String[] quoteDetail = ((String) object.get(key)).split(":");
     // e.g. https://api.etrade.com/v1/market/quote/TSLA:2019:11:22:CALL:257.500000
     Calendar expiryDate = Calendar.getInstance();

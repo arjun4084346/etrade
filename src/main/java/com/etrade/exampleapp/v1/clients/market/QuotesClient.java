@@ -1,7 +1,6 @@
 package com.etrade.exampleapp.v1.clients.market;
 
-import java.util.ArrayList;
-import java.util.Collections;
+import com.google.common.collect.Lists;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,7 +39,7 @@ public class QuotesClient extends Client {
     }
 
     public String getQuotes(String symbol) throws ApiException {
-			return getQuotes(symbol, Collections.emptyList());
+			return getQuotes(symbol, Lists.newArrayList());
 		}
 
 	/*
