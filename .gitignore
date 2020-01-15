@@ -21,6 +21,8 @@ build/
 # Build files
 target/
 
+# log files
+*.log
+
 # plugin generated
 lombok.config
-example-java-app.log
