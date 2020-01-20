@@ -7,9 +7,9 @@ import java.security.NoSuchAlgorithmException;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.Logger;
 
 import com.etrade.exampleapp.v1.oauth.model.OAuthToken;
 import com.etrade.exampleapp.v1.oauth.model.SecurityContext;
@@ -20,9 +20,8 @@ import com.etrade.exampleapp.v1.oauth.model.SecurityContext;
  * a joining of the OAuth Consumer Secret and Token Secret.
  *
  */
+@Slf4j
 public class HmacSha1Signer implements OAuthSigner {
-
-	private Logger log = Logger.getLogger(HmacSha1Signer.class);
 
 	private static String HMAC_SHA1_ALGORITHM = "HmacSHA1";
 

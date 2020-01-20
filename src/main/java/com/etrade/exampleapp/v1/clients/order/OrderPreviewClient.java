@@ -12,6 +12,7 @@ import java.util.UUID;
 
 import javax.inject.Inject;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.velocity.Template;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
@@ -43,6 +44,7 @@ import com.etrade.exampleapp.v1.oauth.model.OauthRequired;
                    OrderAction :                                           BUY
                       Quantity :                                             1
  */
+@Slf4j
 public class OrderPreviewClient extends Client {
 	@Autowired
 	AppController oauthManager;

@@ -1,6 +1,6 @@
 package com.etrade.exampleapp.v1.oauth;
 
-import org.apache.log4j.Logger;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.client.ResourceAccessException;
 
 import com.etrade.exampleapp.v1.exception.ApiException;
@@ -14,9 +14,8 @@ import com.etrade.exampleapp.v1.oauth.model.SecurityContext;
  * Controller class that provides a common entry point for any of the api call.
  * if client tries to access protected resource, it will initiate oauth handshake to get the access token.
  */
+@Slf4j
 public class AppController {
-
-	protected Logger log = Logger.getLogger(AppController.class);
 
 	//Oauth related components
 	private RequestTokenService requestTokenService;
@@ -66,7 +65,6 @@ public class AppController {
 		try {
 			oauthTemplate.computeOauthSignature(message.getHttpMethod(), message.getUrl(), message.getQueryString());
 		} catch (Exception e) {
-			log.error(e);
 			throw new ApiException(500, "500", e.getMessage());
 		}
 

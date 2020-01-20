@@ -7,6 +7,7 @@ import java.util.Formatter;
 import java.util.Iterator;
 import java.util.Map;
 
+import lombok.extern.slf4j.Slf4j;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -24,6 +25,7 @@ import com.etrade.exampleapp.v1.oauth.model.OauthRequired;
  * Client fetches the order list for selected accountIdKey available with account list.
  * client uses oauth_token & oauth_token_secret to access protected resources that is available via oauth handshake.
  */
+@Slf4j
 public class OrderClient extends Client {
 	@Autowired
 	AppController oauthManager;

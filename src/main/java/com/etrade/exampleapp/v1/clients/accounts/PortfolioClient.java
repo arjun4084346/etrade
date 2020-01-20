@@ -1,6 +1,7 @@
 package com.etrade.exampleapp.v1.clients.accounts;
 
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -20,6 +21,7 @@ import com.google.common.collect.Lists;
  * Client fetches the portfolio details for selected accountIdKey available with account list.
  * client uses oauth_token & oauth_token_secret to access protected resources that is available via oauth handshake.
  */
+@Slf4j
 public class PortfolioClient extends Client {
 	@Autowired
 	AppController oauthManager;

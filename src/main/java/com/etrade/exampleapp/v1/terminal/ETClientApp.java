@@ -15,8 +15,8 @@ import java.util.List;
 import java.util.Map;
 
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.log4j.Logger;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -35,9 +35,8 @@ import com.etrade.exampleapp.v1.exception.ApiException;
 
 import static com.etrade.exampleapp.v1.Utils.*;
 
-
+@Slf4j
 public class ETClientApp extends AppCommandLine {
-	private Logger log = Logger.getLogger(ETClientApp.class);
 	private AnnotationConfigApplicationContext ctx = null;
 	private Map<String, String> acctListMap = new HashMap<>();
 	private boolean isLive = false;
@@ -121,8 +120,8 @@ public class ETClientApp extends AppCommandLine {
 				arg = args[0];
 				auto = true;
 			} else {
-				printKeyMenu();
-				choice = KeyIn.getKeyInInteger();
+				//printKeyMenu();
+				choice = 2; //KeyIn.getKeyInInteger();
 			}
 			switch (choice) {
 				case 1:
@@ -274,7 +273,7 @@ public class ETClientApp extends AppCommandLine {
 		try {
 			accountIdKey = getAccountIdKeyForIndex(acctKeyIndex);
 		} catch(ApiException e) {
-			log.error(e);
+			log.error(e.toString());
 			return;
 		}
 		out.print(" Enter Symbol : ");
@@ -338,7 +337,6 @@ public class ETClientApp extends AppCommandLine {
 				}
 			} catch (Exception e) {
 				log.error(" Exception on get accountList : " + e.getMessage());
-				log.error(e);
 				e.printStackTrace();
 			}
 		} catch (ApiException e) {
@@ -676,7 +674,7 @@ public class ETClientApp extends AppCommandLine {
 
 		//queryParams.add(Pair.of("expiryDay", "13"));
 		queryParams.add(Pair.of("expiryYear", "2020"));
-		queryParams.add(Pair.of("expiryMonth", "1"));
+		queryParams.add(Pair.of("expiryMonth", "02"));
 		queryParams.add(Pair.of("noOfStrikes", "8"));
 
     String[] symbols = AppConfig.watchlist;
@@ -1087,7 +1085,7 @@ public class ETClientApp extends AppCommandLine {
 				out.println(ETClientApp.ANSI_RED + "[ERROR] : " + ETClientApp.ANSI_RESET + Thread.currentThread().getStackTrace()[2].getLineNumber());
 			}
 		} catch (ApiException | ParseException e) {
-			log.error(e);
+				log.error(e.toString());
 		}
 
 

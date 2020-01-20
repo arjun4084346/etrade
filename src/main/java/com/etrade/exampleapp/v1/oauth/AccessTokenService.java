@@ -1,6 +1,6 @@
 package com.etrade.exampleapp.v1.oauth;
 
-import org.apache.log4j.Logger;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -20,8 +20,8 @@ import com.etrade.exampleapp.v1.oauth.model.SecurityContext;
 	oauth_signature_method : The signature method the Consumer used to sign the request.
 	oauth_version: 1.0
  */
+@Slf4j
 public class AccessTokenService implements Receiver{
-	protected Logger log = Logger.getLogger(AccessTokenService.class);
 	private Receiver nextReceiver;
 	private CustomRestTemplate customRestTemplate;
 

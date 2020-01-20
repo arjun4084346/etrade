@@ -5,7 +5,6 @@ import com.etrade.exampleapp.v1.clients.market.QuotesClient;
 import com.etrade.exampleapp.v1.clients.order.OrderTerm;
 import com.etrade.exampleapp.v1.clients.order.PriceType;
 import com.etrade.exampleapp.v1.exception.ApiException;
-import com.etrade.exampleapp.v1.terminal.AppConfig;
 import com.etrade.exampleapp.v1.terminal.ETClientApp;
 import java.io.PrintStream;
 import java.time.Instant;
@@ -14,22 +13,19 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import org.apache.commons.lang3.tuple.Pair;
-import org.apache.log4j.Logger;
+import lombok.extern.slf4j.Slf4j;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
-
+@Slf4j
 public class Utils {
   private final static PrintStream out = System.out;
-  private final static Logger log = Logger.getLogger(ETClientApp.class);
   private final static long MILLIS_IN_A_DAY = 24 * 60 * 60 * 1000L;
 
   public static void handleApiException(ApiException e) {
@@ -139,7 +135,7 @@ public class Utils {
         return 0;
       }
     } catch (ApiException | ParseException e) {
-      log.error(e);
+      log.error(e.toString());
     }
     return arbitrage;
   }
@@ -176,7 +172,16 @@ public class Utils {
           List<JSONObject> positions = positionGroups.getOrDefault(symbol, new ArrayList<>());
           positions.add((JSONObject) innerObj);
           positionGroups.put(symbol, positions);
+
+          Calendar expiryDate = getExpiryFromJson((JSONObject) innerObj, "quoteDetails");
+          String daysToExpiry = expiryDate == null ? "--" : String.valueOf(getDaysToExpiry(expiryDate));
+          System.out.println(String.format("%s, delta:%s, gamma:%s, dte:%s",
+                  ((JSONObject) innerObj).get("symbolDescription"),
+                  ((JSONObject)((JSONObject) innerObj).get("Complete")).get("delta"),
+                  ((JSONObject)((JSONObject) innerObj).get("Complete")).get("gamma"),
+                  daysToExpiry));
         }
+        System.out.println("\n");
       }
     } catch(ApiException e) {
       Utils.handleApiException(e);
@@ -266,7 +271,8 @@ public class Utils {
   }
 
   public static Calendar getExpiryFromJson(JSONObject object, String key) {
-    if (((String)((JSONObject) object.get("Product")).get("securityType")).equalsIgnoreCase(SecurityType.EQ.name())) {
+    if (((object.containsKey("Product") &&
+        ((String) ((JSONObject) object.get("Product")).get("securityType")).equalsIgnoreCase(SecurityType.EQ.name())))) {
       return null;
     }
 

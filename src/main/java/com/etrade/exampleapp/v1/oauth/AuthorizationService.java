@@ -3,7 +3,7 @@ package com.etrade.exampleapp.v1.oauth;
 import java.awt.Desktop;
 import java.net.URI;
 
-import org.apache.log4j.Logger;
+import lombok.extern.slf4j.Slf4j;
 
 import com.etrade.exampleapp.v1.exception.ApiException;
 import com.etrade.exampleapp.v1.oauth.model.Message;
@@ -13,9 +13,9 @@ import com.etrade.exampleapp.v1.terminal.KeyIn;
 /*
  * Send the user to authorize url with oauth token. On success, client prompts the user for verifier token available at authorization page.
  */
+@Slf4j
 public class AuthorizationService implements Receiver{
 
-	private Logger log = Logger.getLogger(AuthorizationService.class);
 	private Receiver nextReceiver;
 
 	@Override
@@ -48,7 +48,6 @@ public class AuthorizationService implements Receiver{
 					return false;
 				}
 			} catch (Exception e) {
-				log.error(e);
 				throw new ApiException(500, "502", e.getMessage());
 			}
 		} else {

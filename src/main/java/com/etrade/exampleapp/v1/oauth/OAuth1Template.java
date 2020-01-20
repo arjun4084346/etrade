@@ -11,11 +11,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.net.URLCodec;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.Logger;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
@@ -28,9 +28,8 @@ import com.etrade.exampleapp.v1.oauth.model.Signer;
 /*
  * The class used for generating the oauth signature and related params for oauth and api request
  */
+@Slf4j
 public class OAuth1Template {
-
-	private Logger log = Logger.getLogger(OAuth1Template.class);
 
 	private static final SecureRandom secureRand = new SecureRandom();
 

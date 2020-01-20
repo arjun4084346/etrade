@@ -1,5 +1,6 @@
 package com.etrade.exampleapp.v1.terminal;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -7,10 +8,9 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.log4j.Logger;
 
+@Slf4j
 public class AppCommandLine {
-	protected Logger log = Logger.getLogger(ETClientApp.class);
 	private CommandLine line = null;
 	private CommandLineParser parser;
 	private HelpFormatter formatter;
@@ -43,7 +43,7 @@ public class AppCommandLine {
 		try {
 			line = parser.parse(menuItems, args);
 		} catch (ParseException e) {
-			log.error(e);
+			log.error(e.toString());
 		}
 	}
 

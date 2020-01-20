@@ -2,11 +2,11 @@ package com.etrade.exampleapp.v1.clients;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.log4j.Logger;
 
+@Slf4j
 public abstract class Client {
-	protected Logger log = Logger.getLogger(Client.class);
 
 	public Client(){}
 

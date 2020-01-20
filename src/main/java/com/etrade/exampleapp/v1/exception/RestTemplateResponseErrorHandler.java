@@ -8,7 +8,7 @@ import java.nio.charset.Charset;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
-import org.apache.log4j.Logger;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.util.StreamUtils;
@@ -17,8 +17,8 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.xml.sax.InputSource;
 
+@Slf4j
 public class RestTemplateResponseErrorHandler extends DefaultResponseErrorHandler {
-	private Logger log = Logger.getLogger(RestTemplateResponseErrorHandler.class);
 	private static PrintStream out = System.out;
 	private DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 

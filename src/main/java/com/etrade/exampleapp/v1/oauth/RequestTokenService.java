@@ -1,8 +1,6 @@
 package com.etrade.exampleapp.v1.oauth;
 
-import org.apache.log4j.Logger;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -23,9 +21,8 @@ import com.etrade.exampleapp.v1.oauth.model.SecurityContext;
    oauth_version: 1.0
  */
 //@Component("requestTokenService")
+@Slf4j
 public class RequestTokenService implements Receiver {
-
-	protected Logger log = Logger.getLogger(RequestTokenService.class);
 
 	/* The next component to execute in the oauth execution*/
 	Receiver nextReceiver;

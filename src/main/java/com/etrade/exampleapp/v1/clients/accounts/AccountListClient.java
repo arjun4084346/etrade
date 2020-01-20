@@ -1,5 +1,6 @@
 package com.etrade.exampleapp.v1.clients.accounts;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import com.etrade.exampleapp.v1.clients.Client;
@@ -14,6 +15,7 @@ import com.etrade.exampleapp.v1.oauth.model.OauthRequired;
  * client uses oauth_token & oauth_token_secret to access protected resources that is available via oauth handshake.
  *
  */
+@Slf4j
 public class AccountListClient extends Client {
 	@Autowired
 	AppController oauthManager;

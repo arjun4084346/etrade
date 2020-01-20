@@ -1,7 +1,7 @@
 package com.etrade.exampleapp.v1.oauth;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.Logger;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -20,9 +20,8 @@ import com.etrade.exampleapp.v1.oauth.model.Message;
  * Rest template that is able to make rest call by adding oauth related headers
  *
  */
+@Slf4j
 public class CustomRestTemplate  extends RestTemplate {
-
-	protected Logger log = Logger.getLogger(CustomRestTemplate.class);
 
 	public CustomRestTemplate(ClientHttpRequestFactory factory) {
 		super(factory);

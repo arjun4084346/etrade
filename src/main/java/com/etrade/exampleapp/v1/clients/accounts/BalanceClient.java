@@ -1,5 +1,6 @@
 package com.etrade.exampleapp.v1.clients.accounts;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import com.etrade.exampleapp.v1.clients.Client;
@@ -15,6 +16,7 @@ import com.etrade.exampleapp.v1.oauth.model.OauthRequired;
  * Client fetches the balance details for selected accountIdKey available with account list.
  * client uses oauth_token & oauth_token_secret to access protected resources that is available via oauth handshake.
  */
+@Slf4j
 public class BalanceClient extends Client {
 	@Autowired
 	AppController oauthManager;
@@ -42,7 +44,7 @@ public class BalanceClient extends Client {
 	}
 
 	public String getBalance(String accountIdKey) throws ApiException{
-			log.debug(" Calling Balance API " + getURL(accountIdKey));
+		log.debug("Calling Balance API " + getURL(accountIdKey));
 
 		Message message = new Message();
 		message.setOauthRequired(OauthRequired.YES);
