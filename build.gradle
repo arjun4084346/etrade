@@ -52,7 +52,7 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
-task runApp(type: JavaExec) {
+task run(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'com.etrade.exampleapp.v1.terminal.ETClientApp'
     standardInput = System.in

@@ -10,19 +10,19 @@ The example application provides an environment for testing and validating the s
 
 ## Requirements
  - Java 1.8 or later.
- - Maven 3.0.3 or later
+ - Gradle
  - An [E*TRADE](https://us.etrade.com) account.
  - E*TRADE consumer key and consumer secret.
 	
  ## Setup
- - Unzip the java_example_app.zip.
+ - git clone the repository.
  - Update oauth keys in the oauth.properties file available with source.
+ - Run `git update-index --assume-unchanged  src/main/resources/oauth.properties` to not expose your keys accidentally.
 
 ## Running Code 
 
- - Run `maven clean install`
- - If you encounter any issues to run `maven clean install` command, please change file permissions on the source folder.
- - From the Root project directory, run the `run` script for mac/linux environment. For Windows, use `run.bat`.
+ - Run `./gradlew run`
+ - To run in cron mode, pass parameters, e.g. `./gradlew run --args='manage'` `./gradlew run --args='find'`
 
 ## Features
  - Sandbox

@@ -13,6 +13,7 @@ classes/
 
 # Gradle files
 .gradle/
+gradle/
 build/
 
 # OS X

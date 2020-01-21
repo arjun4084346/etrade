@@ -175,11 +175,11 @@ public class Utils {
 
           Calendar expiryDate = getExpiryFromJson((JSONObject) innerObj, "quoteDetails");
           String daysToExpiry = expiryDate == null ? "--" : String.valueOf(getDaysToExpiry(expiryDate));
-          System.out.println(String.format("%s, delta:%s, gamma:%s, dte:%s",
-                  ((JSONObject) innerObj).get("symbolDescription"),
-                  ((JSONObject)((JSONObject) innerObj).get("Complete")).get("delta"),
-                  ((JSONObject)((JSONObject) innerObj).get("Complete")).get("gamma"),
-                  daysToExpiry));
+//          System.out.println(String.format("%s, delta:%s, gamma:%s, dte:%s",
+//                  ((JSONObject) innerObj).get("symbolDescription"),
+//                  ((JSONObject)((JSONObject) innerObj).get("Complete")).get("delta"),
+//                  ((JSONObject)((JSONObject) innerObj).get("Complete")).get("gamma"),
+//                  daysToExpiry));
         }
         System.out.println("\n");
       }
