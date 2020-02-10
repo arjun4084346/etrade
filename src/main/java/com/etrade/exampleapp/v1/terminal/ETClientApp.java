@@ -1,9 +1,20 @@
 package com.etrade.exampleapp.v1.terminal;
 
+import com.etrade.exampleapp.config.OOauthConfig;
+import com.etrade.exampleapp.config.SandBoxConfig;
+import com.etrade.exampleapp.v1.clients.accounts.AccountListClient;
+import com.etrade.exampleapp.v1.clients.accounts.BalanceClient;
 import com.etrade.exampleapp.v1.clients.accounts.OptionsChainClient;
+import com.etrade.exampleapp.v1.clients.accounts.PortfolioClient;
+import com.etrade.exampleapp.v1.clients.market.QuotesClient;
+import com.etrade.exampleapp.v1.clients.order.OrderClient;
+import com.etrade.exampleapp.v1.clients.order.OrderPreviewClient;
+import com.etrade.exampleapp.v1.exception.ApiException;
+import com.google.common.collect.Lists;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -13,7 +24,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
@@ -22,16 +32,6 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-
-import com.etrade.exampleapp.config.OOauthConfig;
-import com.etrade.exampleapp.config.SandBoxConfig;
-import com.etrade.exampleapp.v1.clients.accounts.AccountListClient;
-import com.etrade.exampleapp.v1.clients.accounts.BalanceClient;
-import com.etrade.exampleapp.v1.clients.accounts.PortfolioClient;
-import com.etrade.exampleapp.v1.clients.market.QuotesClient;
-import com.etrade.exampleapp.v1.clients.order.OrderClient;
-import com.etrade.exampleapp.v1.clients.order.OrderPreviewClient;
-import com.etrade.exampleapp.v1.exception.ApiException;
 
 import static com.etrade.exampleapp.v1.Utils.*;
 
@@ -350,6 +350,9 @@ public class ETClientApp extends AppCommandLine {
 		BalanceClient client = ctx.getBean(BalanceClient.class);
 		String response = "";
 		String accountIdKey;
+		Double totalAccountValue = 0.0;
+		Double cashBuyingPower = 0.0;
+
 		try {
 			accountIdKey = getAccountIdKeyForIndex(acctIndex);
 		} catch(ApiException e) {
@@ -385,10 +388,10 @@ public class ETClientApp extends AppCommandLine {
 
 			if (realTimeVal.get("totalAccountValue") != null) {
 				if (Double.class.isAssignableFrom(realTimeVal.get("totalAccountValue").getClass())) {
-					Double totalAccountValue = (Double)realTimeVal.get("totalAccountValue");
+					totalAccountValue = (Double)realTimeVal.get("totalAccountValue");
 					out.println("\t\tLive Account Value:      $" + totalAccountValue);
 				} else if( Long.class.isAssignableFrom(realTimeVal.get("totalAccountValue").getClass())){
-					Long totalAccountValue = (Long)realTimeVal.get("totalAccountValue");
+					totalAccountValue = ((Long)realTimeVal.get("totalAccountValue")).doubleValue();
 					out.println("\t\tLive Account Value:      $" + totalAccountValue);
 				}
 			}
@@ -398,20 +401,27 @@ public class ETClientApp extends AppCommandLine {
 					Double marginBuyingPower = (Double)computedRec.get("marginBuyingPower");
 					out.println("\t\tMargin Buying Power:     $" + marginBuyingPower);
 				} else if( Long.class.isAssignableFrom(computedRec.get("marginBuyingPower").getClass())){
-					Long totalAccountValue = (Long)computedRec.get("marginBuyingPower");
-					out.println("\t\tMargin Buying Power:     $" + totalAccountValue);
+					Long marginBuyingPower = (Long)computedRec.get("marginBuyingPower");
+					out.println("\t\tMargin Buying Power:     $" + marginBuyingPower);
 				}
 			}
 
 			if (computedRec.get("cashBuyingPower") != null) {
 				if (Double.class.isAssignableFrom(computedRec.get("cashBuyingPower").getClass())) {
-					Double cashBuyingPower = (Double)computedRec.get("cashBuyingPower");
+					cashBuyingPower = (Double)computedRec.get("cashBuyingPower");
 					out.println("\t\tCash Buying Power:       $" + cashBuyingPower);
 				} else if( Long.class.isAssignableFrom(computedRec.get("cashBuyingPower").getClass())){
-					Long cashBuyingPower = (Long)computedRec.get("cashBuyingPower");
+					cashBuyingPower = ((Long)computedRec.get("cashBuyingPower")).doubleValue();
 					out.println("\t\tCash Buying Power:       $" + cashBuyingPower);
 				}
 			}
+
+			double currentInvestment = totalAccountValue - cashBuyingPower;
+			double acceptableNetDollarDelta = currentInvestment * AppConfig.level2Delta;
+
+			out.println("\t\tAcceptable Net Dollar Delta:   $" + acceptableNetDollarDelta);
+
+			printPortfolioData(accountIdKey, acceptableNetDollarDelta, currentInvestment);
 
 			System.out.println("\n");
 		} catch(ApiException e) {
@@ -419,6 +429,76 @@ public class ETClientApp extends AppCommandLine {
 		} catch (Exception e) {
 			log.error(" getBalance : GenericException " ,e);
 		}
+	}
+
+	private void printPortfolioData(String accountIdKey, double acceptableNetDollarDelta, double currentInvestment) throws ApiException, ParseException {
+		PortfolioClient client = ctx.getBean(PortfolioClient.class);
+		double netDollarDelta = 0.0;
+		double actualNetDollarDelta = 0.0;
+		double netTheta = 0.0;
+		Map<String, Double> underlyingsAndPrices = new HashMap<>();
+		NumberFormat myFormat = NumberFormat.getInstance();
+
+
+		String response = client.getPortfolio(accountIdKey);
+		log.debug(" Response String : " + response);
+		JSONParser jsonParser = new JSONParser();
+
+		JSONObject jsonObject = (JSONObject) jsonParser.parse(response);
+		JSONObject portfolioResponse = (JSONObject) jsonObject.get("PortfolioResponse");
+		JSONArray accountPortfolioArr = (JSONArray) portfolioResponse.get("AccountPortfolio");
+
+		for (Object o : accountPortfolioArr) {
+			JSONObject acctObj = (JSONObject) o;
+			JSONArray positionArr = (JSONArray) acctObj.get("Position");
+			for (Object value : positionArr) {
+				double delta;
+				double theta;
+				JSONObject position = (JSONObject) value;
+				JSONObject positionCompleteData = (JSONObject) position.get("Complete");
+				JSONObject positionProductData = (JSONObject) position.get("Product");
+				String underlyingSymbol = (String) ((JSONObject) position.get("Product")).get("symbol");
+				SecurityType securityType = SecurityType.valueOf((String) positionProductData.get("securityType"));
+				PositionType positionType = PositionType.valueOf((String) position.get("positionType"));
+				long quantity = Math.abs((long) position.get("quantity"));
+				if (!underlyingsAndPrices.containsKey(underlyingSymbol)) {
+					underlyingsAndPrices.put(underlyingSymbol, getCurrentMidPrice(ctx, underlyingSymbol));
+				}
+
+				double underlyingPrice = underlyingsAndPrices.get(underlyingSymbol);
+
+				if (securityType.equals(SecurityType.EQ)) {
+					delta = quantity;
+					theta = 0.0;
+				} else {
+					delta = (double) positionCompleteData.get("delta") * quantity * 100;
+					theta = (double) positionCompleteData.get("theta") * quantity * 100;
+				}
+
+				delta = positionType.equals(PositionType.LONG) ? delta : -delta;
+				theta = positionType.equals(PositionType.LONG) ? theta : -theta;
+
+				netDollarDelta += delta * underlyingPrice;
+
+				// TLT and VXX has opposite correlation with SPX
+				delta = (underlyingSymbol.equals("VXX") || underlyingSymbol.equals("TLT")) ? -delta : delta;
+
+				actualNetDollarDelta += delta * underlyingPrice;
+
+				netTheta += theta;
+			}
+		}
+
+		//out.format("%-25s%8s\n", "\t\tDollar Delta:", "$" + myFormat.format(Math.round(netDollarDelta)));
+		if (actualNetDollarDelta > acceptableNetDollarDelta ||
+				actualNetDollarDelta < -acceptableNetDollarDelta) {
+			out.format(ANSI_RED + "%-25s%8s\n", "\t\tDollar Delta:", "$" + myFormat.format(Math.round(actualNetDollarDelta)) + ANSI_RESET);
+		} else {
+			out.format("%-25s%8s\n", "\t\tDollar Delta:", "$" + myFormat.format(Math.round(actualNetDollarDelta)));
+		}
+		out.format("%-25s%8s\n", "\t\tDelta:", actualNetDollarDelta/currentInvestment);
+		out.format("%-25s%8s\n", "\t\tTheta:", "$" + myFormat.format(Math.round(netTheta)));
+		out.format("%-25s%8s\n", "\t\tNumber of positions:", underlyingsAndPrices.size());
 	}
 
 	private void getPortfolio(String acctIndex) {
@@ -693,6 +773,7 @@ public class ETClientApp extends AppCommandLine {
 
 	private void processOptionsChain(double underlyingPrice, JSONObject optionsChain) {
 		JSONArray optionPair = (JSONArray) optionsChain.get("OptionPair");
+		QuotesClient client = ctx.getBean(QuotesClient.class);
 		// option chain might be not available for that expiry for that symbol
 		if (optionPair == null) {
 			out.println("No option pair received.");
@@ -703,6 +784,15 @@ public class ETClientApp extends AppCommandLine {
 			JSONObject callPutPair = (JSONObject) o;
 			JSONObject call = (JSONObject) callPutPair.get("Call");
 			JSONObject put = (JSONObject) callPutPair.get("Put");
+			String underlying = (String) call.get("symbol");
+			String response = "";
+			List<Pair> a = Lists.newArrayList();
+			//a.add(Pair.of("detailFlag", "OPTIONS"));
+			try {
+				response = client.getQuotes(underlying, a);
+			} catch (ApiException e) {
+				e.printStackTrace();
+			}
 			processOnePair(underlyingPrice, call, put);
 		}
 	}
@@ -780,15 +870,10 @@ public class ETClientApp extends AppCommandLine {
 //				continue;
 //			}
 			OptionsStrategy optionsStrategy = identifyPositionType(entry.getValue());
+			earlyManagement(entry.getValue(), managedPositions);
 			switch (optionsStrategy) {
-				case SHORT_PUT:
-				case SHORT_CALL:
-				case SHORT_STRANGLE:
-					manageDelta(entry.getValue(), managedPositions, OptionsStrategy.SHORT_STRANGLE);
-          manageShortStrangle(entry.getValue(), managedPositions);
-					break;
 				case COVERED_CALL:
-					manageDelta(entry.getValue(), managedPositions, OptionsStrategy.COVERED_CALL, 0.30, 0.50, .90);
+					manageDelta(entry.getValue(), managedPositions, optionsStrategy, .30, 0.50, 0.90);
 					break;
 				case LONG_ARBITRAGE:
 					manageLongArbitrage(entry.getKey(), entry.getValue(), managedPositions);
@@ -796,9 +881,16 @@ public class ETClientApp extends AppCommandLine {
 				case SHORT_STRADDLE:
 				// TODO : add more management strategies
 					break;
+				case SPREAD:
+					manageDelta(entry.getValue(), managedPositions, optionsStrategy, 0.25, .75, 1.0);
+				case SHORT_PUT:
+				case SHORT_CALL:
+				case SHORT_STRANGLE:
 				case OTHERS:
-					manageDelta(entry.getValue(), managedPositions, OptionsStrategy.OTHERS);
+					manageDelta(entry.getValue(), managedPositions, optionsStrategy);
+					break;
 				default:
+					out.println(ANSI_RED + "[ERROR] : Unknown Strategy for " + entry.getKey() + ANSI_RESET);
 					break;
 			}
 		}
@@ -836,10 +928,10 @@ public class ETClientApp extends AppCommandLine {
 			JSONObject positionCompleteData = (JSONObject) position.get("Complete");
 			SecurityType securityType = SecurityType.valueOf((String) positionProductData.get("securityType"));
 			long quantity = Math.abs((long) position.get("quantity"));
-			double delta = 0;
+			double delta;
 
 			if (securityType.equals(SecurityType.EQ)) {
-				equityDelta = quantity/100;
+				equityDelta = quantity / 100.0;
 				numOfShares = quantity;
 			} else {
 				delta = (double) positionCompleteData.get("delta");
@@ -883,28 +975,34 @@ public class ETClientApp extends AppCommandLine {
 				}
 				break;
 			case CREDIT_SPREAD:
-				if (maxCallDelta > 2) {
+				if (maxCallDelta > 2) {	// todo: what's this!
 					adjustmentNeeded = true;
 				}
+				break;
+			case SPREAD:	// for now working more like a credit spread
+				if (numOfITMcalls > highDeltaPuts || numOfITMPuts > highDeltaCalls ||
+						(maxCallDelta < -level2Delta && maxPutDelta < level3Delta) || (maxPutDelta > level2Delta && maxCallDelta < level3Delta)) {
+					adjustmentNeeded = true;
+				}
+				break;
+			case SHORT_STRANGLE:
+			case OTHERS:
+				if ((numOfITMcalls > highDeltaPuts || numOfITMPuts > highDeltaCalls) ||
+						(netDeltaPerContract < -level2Delta || netDeltaPerContract > level2Delta) ||
+						(maxCallDelta < -level3Delta || maxPutDelta > level3Delta)) {
+					adjustmentNeeded = true;
+				}
+				break;
 			default:
-				if (numOfITMcalls > highDeltaPuts ||
-						numOfITMPuts > highDeltaCalls ||
-						netDeltaPerContract < -level2Delta ||
-						netDeltaPerContract > level2Delta ||
-						maxCallDelta < -level3Delta ||
-						maxPutDelta > level3Delta) {
-					adjustmentNeeded = true;
-				}
+				out.println(ANSI_RED + "[ERROR] : Unknown Strategy for " + underlyingSymbol + ANSI_RESET);
 		}
-
-
 
 		if (adjustmentNeeded) {
 			out.println(underlyingSymbol + " needs delta adjustment.");
 		}
 	}
 
-	private void manageShortStrangle(List<JSONObject> positions, Set<String> managedPositions) {
+	private void earlyManagement(List<JSONObject> positions, Set<String> managedPositions) {
 		// keep in mind that eligibility for managing is a different thing and being able to roll is different
 		// the later part involves data about IV earnings, to decide roll/close/strike/expiry - out of scope
 
@@ -1006,6 +1104,12 @@ public class ETClientApp extends AppCommandLine {
   private void percentageGainManagement(JSONObject position, Set<String> managedPositions) {
 		double totalPercentageGain = 0;
 		double ivRank = 0.0;
+
+		String underlyingSymbol = (String) ((JSONObject)position.get("Product")).get("symbol");
+		if (managedPositions.contains(underlyingSymbol)) {
+			return;
+		}
+
     if (Double.class.isAssignableFrom(position.get("totalGainPct").getClass())) {
       totalPercentageGain = (double) position.get("totalGainPct");
     } else if (Long.class.isAssignableFrom(position.get("totalGainPct").getClass())) {
@@ -1018,7 +1122,7 @@ public class ETClientApp extends AppCommandLine {
 			// TODO : how to find iv rank???
 			// && ivRank > AppConfig.highIVRank) {
 			out.println("Target achieved for : " + position.get("symbolDescription"));
-			managedPositions.add((String) position.get("symbolDescription"));
+			managedPositions.add(underlyingSymbol);
 		}
   }
 
@@ -1033,6 +1137,15 @@ public class ETClientApp extends AppCommandLine {
 
 	private void timeManagement(JSONObject position, Set<String> managedPositions) {
     Calendar expiryDate = getExpiryFromJson(position, "quoteDetails");
+    if (expiryDate == null) {
+    	return;
+		}
+
+		String underlyingSymbol = (String) ((JSONObject)position.get("Product")).get("symbol");
+
+		if (managedPositions.contains(underlyingSymbol)) {
+			return;
+		}
     int daysToExpiry = getDaysToExpiry(expiryDate);
     if (daysToExpiry < AppConfig.criticalDTE && profit(position) > 0) {
 			// time management does not depend upon IV
@@ -1045,7 +1158,7 @@ public class ETClientApp extends AppCommandLine {
 			//		&& other leg is in loss	) {
 			// todo : if (earnings are near or iv is low) and total position is in net loss, do not print
 				out.println("Position " + position.get("symbolDescription") + " too close to expiry.");
-				managedPositions.add((String) position.get("symbolDescription"));
+				managedPositions.add(underlyingSymbol);
 			//}
 		}
   }

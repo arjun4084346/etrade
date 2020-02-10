@@ -202,7 +202,7 @@ public class Utils {
   // one algo to find strategies is to start searching by num of positions.
   // if num of positions is 4, it can only be iron condor or something managed in the same way
   // if it is 6, it can only be butterfly
-  public static OptionsStrategy identifyPositionType(List<JSONObject> value) {
+  public static OptionsStrategy identifyPositionType(List<JSONObject> positions) {
     int numOfShortCalls = 0;
     int numOfLongCalls = 0;
     int numOfShortPuts = 0;
@@ -211,7 +211,7 @@ public class Utils {
     int numOfShares = 0;
     int numOfPositions = 0;
 
-    for(JSONObject position : value) {
+    for(JSONObject position : positions) {
       JSONObject product = (JSONObject) position.get("Product");
       SecurityType securityType = SecurityType.valueOf((String) product.get("securityType"));
       PositionType positionType = PositionType.valueOf((String) position.get("positionType"));
@@ -334,6 +334,7 @@ public class Utils {
   public enum OptionsStrategy {
     SHORT_STRANGLE,
     SHORT_STRADDLE,
+    SHORT_IC,
     LONG_ARBITRAGE,
     SHORT_DIAGONAL,
     LONG_DIAGONAL,
